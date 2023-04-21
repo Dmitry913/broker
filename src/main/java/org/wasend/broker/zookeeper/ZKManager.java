@@ -1,4 +1,4 @@
-package zookeeper;
+package org.wasend.broker.zookeeper;
 
 import org.apache.zookeeper.KeeperException;
 

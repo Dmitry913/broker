@@ -1,5 +1,6 @@
 package org.wasend.broker.zookeeper;
 
+import com.sun.tools.javac.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.x.async.AsyncCuratorFramework;
@@ -16,11 +17,29 @@ import static org.apache.zookeeper.Watcher.Event.EventType.NodeDataChanged;
 @RequiredArgsConstructor
 @Component
 @Slf4j
+// todo нужно обязательно вызывать метод sync, там где нужна согласованность данных,
+//  иначе мы можем получить разные данные на двух клиентах, если они подсоединены к разным серверам
+
+// todo можно сохранить session_id и password в локальное хранилище (в файлик сервера) и подключится к той же самой сессии после перезапуска приклада
+//  - нужно просто скормить параметры session_id и password при подключении к системе
 public class CuratorZooKeeper {
 
     private static final String TEST_PATH = "/test3";
     private final AsyncCuratorFramework curatorFramework;
 
+    /**
+     * Существует 2 потока:
+     *  1) для IO операций, переподключения к серверу и сердцебиения
+     *  2) для коллбеков и event событий
+     *  Причём второй тип потоков может выполнять только один коллбек за раз - то есть, он блокируется на время выполнения callback
+     */
+
+    /**
+     * 1) Тригер для вотчера будет отправлен единожды - то есть, мы читаем данные: потом навешиваем вотчер, и при измененеии данных, данный вотчер сработает.
+     * Затем нам нужно будет навешать вотчер вновь, иначе тригера не произойдёт
+     * 2) Мы можем пропустить некоторые события, которые будут между получением события и установкой нового вотчера (МОЖЕТ БЫТЬ МОЖНО КАК-ТО ЧЕРЕЗ ВЕРСИИ ПОРЕШАТЬ?)
+     * 3) если упадёт сервер зукипер, то я получу session-event, и больше не буду получать события до тех пор, пока сервер не поднимется вновь.
+     */
     public void doTest() throws InterruptedException {
         // defaultValue: CreateMode.PERSISTENT и ZooDefs.Ids.OPEN_ACL_UNSAFE
         curatorFramework.delete()
@@ -59,6 +78,9 @@ public class CuratorZooKeeper {
                 });
         curatorFramework.setData()
                 .forPath(TEST_PATH, "java".getBytes(StandardCharsets.UTF_8));
+        setData(NodeConfigInfo.builder().host("host2").port(44).build(), TEST_PATH);
+        setData(NodeConfigInfo.builder().host("host45").port(12).nodeIdOfStoredReplicas(List.of("dsds")).build(), TEST_PATH);
+        setData(NodeConfigInfo.builder().host("32").port(5).nodeIdOfStoredReplicas(List.of("dsds")).build(), TEST_PATH);
         Thread.sleep(11000);
     }
 
@@ -66,12 +88,12 @@ public class CuratorZooKeeper {
     // создаёт путь с такими данными или обновляет существующие
     private void setData(NodeConfigInfo nodeConfigInfo, String path) {
         ModelSpec<NodeConfigInfo> spec = ModelSpec.builder(
-                ZPath.parseWithIds(path),
-                JacksonModelSerializer.build(NodeConfigInfo.class))
+                        ZPath.parseWithIds(path),
+                        JacksonModelSerializer.build(NodeConfigInfo.class))
                 .build();
         ModeledFramework<NodeConfigInfo> modeledClient = ModeledFramework.wrap(curatorFramework, spec);
         log.info("Set data to " + path);
         // todo тут нужно как-то обработать ModelStage.exceptionally
-        modeledClient.update(nodeConfigInfo);
+        modeledClient.set(nodeConfigInfo);
     }
 }

@@ -9,6 +9,8 @@ import org.wasend.broker.zookeeper.CuratorZooKeeper;
 public class Main {
 
     public static void main(String[] args) throws InterruptedException {
+        // todo создать ноду в директории cluster, как только приложение запустилось
+        // todo навешать вотчер на директорию cluster, чтобы отслеживать падение других брокеров
         ApplicationContext context = SpringApplication.run(Main.class, args);
         ((CuratorZooKeeper) context.getBean("curatorZooKeeper")).doTest();
     }

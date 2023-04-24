@@ -1,6 +1,5 @@
 package org.wasend.broker.zookeeper;
 
-import com.sun.tools.javac.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.x.async.AsyncCuratorFramework;
@@ -11,6 +10,8 @@ import org.apache.curator.x.async.modeled.ZPath;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
 
 import static org.apache.zookeeper.Watcher.Event.EventType.NodeDataChanged;
 
@@ -79,8 +80,8 @@ public class CuratorZooKeeper {
         curatorFramework.setData()
                 .forPath(TEST_PATH, "java".getBytes(StandardCharsets.UTF_8));
         setData(NodeConfigInfo.builder().host("host2").port(44).build(), TEST_PATH);
-        setData(NodeConfigInfo.builder().host("host45").port(12).nodeIdOfStoredReplicas(List.of("dsds")).build(), TEST_PATH);
-        setData(NodeConfigInfo.builder().host("32").port(5).nodeIdOfStoredReplicas(List.of("dsds")).build(), TEST_PATH);
+        setData(NodeConfigInfo.builder().host("host45").port(12).nodeIdOfStoredReplicas(Collections.singletonList("dsds")).build(), TEST_PATH);
+        setData(NodeConfigInfo.builder().host("32").port(5).nodeIdOfStoredReplicas(Collections.singletonList("a23d")).build(), TEST_PATH);
         Thread.sleep(11000);
     }
 

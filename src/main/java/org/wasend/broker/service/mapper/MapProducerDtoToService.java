@@ -1,8 +1,8 @@
-package org.wasend.broker.mapper;
+package org.wasend.broker.service.mapper;
 
 import org.mapstruct.Mapper;
 import org.wasend.broker.dto.ProducerMessage;
-import org.wasend.broker.model.MessageModel;
+import org.wasend.broker.service.model.MessageModel;
 
 @Mapper(componentModel = "spring")
 public interface MapProducerDtoToService extends DefaultMapper<MessageModel, ProducerMessage> {

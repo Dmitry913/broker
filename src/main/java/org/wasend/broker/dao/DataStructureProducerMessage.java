@@ -1,8 +1,6 @@
 package org.wasend.broker.dao;
 
-import org.springframework.stereotype.Component;
-import org.wasend.broker.dto.ProducerMessage;
-import org.wasend.broker.model.MessageModel;
+import org.wasend.broker.service.model.MessageModel;
 
 import java.util.ArrayDeque;
 import java.util.Queue;

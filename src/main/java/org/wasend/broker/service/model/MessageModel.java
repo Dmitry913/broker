@@ -1,4 +1,4 @@
-package org.wasend.broker.model;
+package org.wasend.broker.service.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -1,14 +1,9 @@
-package org.wasend.broker.controller;
+package org.wasend.broker.controller.filter;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.MethodParameter;
-import org.springframework.http.HttpInputMessage;
-import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.servlet.mvc.method.annotation.RequestBodyAdviceAdapter;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
@@ -22,7 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 
 @ControllerAdvice
 @Slf4j
-public class LogController extends OncePerRequestFilter {
+public class LogFilter extends OncePerRequestFilter {
 
     // TODO можно сделать иначе, чтобы логировать и данные с body
     @Override

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.wasend.broker.dao.QueueRepository;
 import org.wasend.broker.exception.SendingCustomerException;
-import org.wasend.broker.model.MessageModel;
+import org.wasend.broker.service.model.MessageModel;
 import reactor.core.publisher.Mono;
 
 @Service

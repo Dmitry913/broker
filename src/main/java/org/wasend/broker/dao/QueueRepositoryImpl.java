@@ -1,26 +1,33 @@
 package org.wasend.broker.dao;
 
 import org.springframework.stereotype.Repository;
-import org.wasend.broker.dto.ProducerMessage;
-import org.wasend.broker.model.MessageModel;
+import org.wasend.broker.service.model.MessageModel;
+import org.wasend.broker.service.model.RegistryModel;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 
 @Repository
 public class QueueRepositoryImpl implements QueueRepository {
 
+    // todo перенести хранение в файл
     private final DataStructure<MessageModel> dataStructure;
+    // todo перенести хранение в файл
+    private final Set<String> urlConsumers;
 
     public QueueRepositoryImpl() {
         dataStructure = new DataStructureProducerMessage();
+        urlConsumers = new HashSet<>();
     }
 
     // у сообщений должны быть какие-то id
     @Override
-    public void addMessage(MessageModel producerMessage) {
+    public void addMessage(MessageModel model) {
         // todo вставить сообщение в правильное место в очереди
-        dataStructure.add(producerMessage);
+        dataStructure.add(model);
     }
 
     // todo нужно обработать кейс, когда тут висит в ожидание сообщение, которое ждёт своего времени обработки,
@@ -33,5 +40,10 @@ public class QueueRepositoryImpl implements QueueRepository {
 
         }
         return dataStructure.getMin();
+    }
+
+    @Override
+    public void registry(RegistryModel model) {
+
     }
 }

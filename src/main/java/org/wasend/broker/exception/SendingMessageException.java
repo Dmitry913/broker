@@ -3,7 +3,7 @@ package org.wasend.broker.exception;
 import lombok.AllArgsConstructor;
 
 @AllArgsConstructor
-public class SendingCustomerException extends RuntimeException {
+public class SendingMessageException extends RuntimeException {
     private final String messageId;
-    private final String customerUrl;
+    private final String url;
 }

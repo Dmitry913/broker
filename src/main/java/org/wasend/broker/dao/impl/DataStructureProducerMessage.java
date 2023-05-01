@@ -1,5 +1,6 @@
-package org.wasend.broker.dao;
+package org.wasend.broker.dao.impl;
 
+import org.wasend.broker.dao.interfaces.DataStructure;
 import org.wasend.broker.service.model.MessageModel;
 
 import java.util.ArrayDeque;

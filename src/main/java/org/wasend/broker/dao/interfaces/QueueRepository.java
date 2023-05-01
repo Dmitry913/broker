@@ -1,4 +1,4 @@
-package org.wasend.broker.dao;
+package org.wasend.broker.dao.interfaces;
 
 import org.wasend.broker.service.model.MessageModel;
 import org.wasend.broker.service.model.RegistryModel;
@@ -18,5 +18,9 @@ public interface QueueRepository {
      */
     MessageModel getMessage();
 
+    /**
+     * Зарегистрировать нового consumer-а
+     * @param model
+     */
     void registry(RegistryModel model);
 }

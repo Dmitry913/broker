@@ -1,12 +1,13 @@
-package org.wasend.broker.dao;
+package org.wasend.broker.dao.impl;
 
 import org.springframework.stereotype.Repository;
+import org.wasend.broker.dao.interfaces.DataStructure;
+import org.wasend.broker.dao.interfaces.QueueRepository;
 import org.wasend.broker.service.model.MessageModel;
 import org.wasend.broker.service.model.RegistryModel;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 

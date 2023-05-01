@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Builder
-public class RegistryModel {
+public class RegistryModel extends Message {
     private LocalDateTime timeRegistration;
     private String url;
 }

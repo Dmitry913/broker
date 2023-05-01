@@ -14,8 +14,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class MessageModel {
-    private String id;
+public class MessageModel extends Message {
     private String topicName;
     /**
      * передаваемая информация

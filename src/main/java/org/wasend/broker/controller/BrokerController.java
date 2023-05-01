@@ -13,7 +13,7 @@ import org.wasend.broker.dto.ProducerMessage;
         produces = MediaType.APPLICATION_JSON_VALUE)
 public class BrokerController {
 
-    @PostMapping("/upgradeReplica")
+    @PostMapping("/updateReplica")
     // todo тут нужно реализовать механизм принятия сообщений
     public void addReplica(@RequestBody ProducerMessage message) {
 

@@ -1,4 +1,4 @@
-package org.wasend.broker.dao;
+package org.wasend.broker.dao.interfaces;
 
 public interface DataStructure<T> {
 

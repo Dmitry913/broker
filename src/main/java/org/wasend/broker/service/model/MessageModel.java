@@ -16,6 +16,7 @@ import java.util.List;
 @Builder
 public class MessageModel extends Message {
     private String topicName;
+    private boolean isReplica = false;
     /**
      * передаваемая информация
      */

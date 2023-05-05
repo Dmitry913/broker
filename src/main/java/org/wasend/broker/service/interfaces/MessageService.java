@@ -2,13 +2,15 @@ package org.wasend.broker.service.interfaces;
 
 import org.wasend.broker.dto.ConsumerMessage;
 import org.wasend.broker.dto.ProducerMessage;
+import org.wasend.broker.service.model.MessageModel;
+import org.wasend.broker.service.model.RegistryModel;
 
 /**
- * Сервис для обработки сообщений от producer и consumer
+ * Сервис для выполнения операций над сообщениями
  */
 public interface MessageService {
 
-    void addMessage(ProducerMessage producerMessage);
+    void addMessage(MessageModel producerMessage);
 
-    void registry(ConsumerMessage consumerMessage);
+    void registry(RegistryModel consumerMessage);
 }

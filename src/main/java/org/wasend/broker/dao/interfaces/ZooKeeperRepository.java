@@ -14,5 +14,16 @@ public interface ZooKeeperRepository {
     /**
      * Позволяет получить хосты всех существующих реплик
      */
-    Set<String> getAllNodesAddress();
+    Set<String> getAllNodesHost();
+
+    /**
+     * Получаем название всех существующих топиков
+     */
+    Set<String> getAllTopicName();
+
+    int getCountPartition();
+
+    String getCurrentNodeId();
+
+    void addNewTopicInfo(String topicName, Set<String> partitionHost);
 }

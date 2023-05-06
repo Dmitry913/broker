@@ -10,8 +10,16 @@ import java.util.Map;
 @Getter
 public class MetaInfoZK {
     private Map<String, TopicInfo> topicNameToInfo;
+//    /**
+//     * Количество реплик для каждого топика (master-slave) - используется для согласованности данных
+//     */
+//    private int countReplicas;
     /**
-     * Количество реплик для каждого топика
+     * Количество партиций для каждого топика (master-master) - используется для ускорения
      */
-    private int countReplicas;
+    private int countPartition;
+
+    public void addNewTopic(TopicInfo info) {
+        topicNameToInfo.put(info.getName(), info);
+    }
 }

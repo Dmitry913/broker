@@ -11,4 +11,9 @@ public interface MessageService {
     void addMessage(MessageModel producerMessage);
 
     void registry(RegistryModel consumerMessage);
+
+    /**
+     * Сколько всего мастер сообщений - на данному узле
+     */
+    Integer getCountMessage();
 }

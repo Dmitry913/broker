@@ -1,9 +1,11 @@
 package org.wasend.broker.dao.impl;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 import org.wasend.broker.dao.entity.MetaInfoZK;
 import org.wasend.broker.dao.entity.NodeInfo;
+import org.wasend.broker.dao.entity.TopicInfo;
 import org.wasend.broker.dao.interfaces.ZooKeeperRepository;
 import org.wasend.broker.zookeeper.CuratorZooKeeper;
 import reactor.core.publisher.Flux;
@@ -20,7 +22,9 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
     private final CuratorZooKeeper curatorZooKeeper;
     private final MetaInfoZK rootInfo;
     // Возможно стоит сделать синхронной(блокирующей)?
-    private Map<String, NodeInfo> nodesInfo;
+    private Map<String, NodeInfo> directoryToNodesInfo;
+    @Value("zooKeeper.current.nodeId")
+    private String currentNodeId;
 
     @Autowired
     public ZooKeeperRepositoryImpl(CuratorZooKeeper curatorZooKeeper) throws Exception {
@@ -34,7 +38,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
                         // получаем информацию обо всех существующих nodes
                         rootInfo.getTopicNameToInfo().values()
                                 // получаем наименование директорий всех узлов
-                                .stream().flatMap(topicInfo -> topicInfo.getReplicasPlace().stream()).collect(Collectors.toSet())
+                                .stream().flatMap(topicInfo -> topicInfo.getPartitionMasterNode().stream()).collect(Collectors.toSet())
                 )
                 .flatMap(directoryName -> Mono.just(curatorZooKeeper.getNodeInfoByDirectory(directoryName)))
                 .collectList()
@@ -44,17 +48,43 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
     @Override
     public Set<String> getReplicasAddress(String topicName) {
         // получаем nodeId(название относительной директории) всех реплик
-        return rootInfo.getTopicNameToInfo().get(topicName).getReplicasPlace()
+        return rootInfo.getTopicNameToInfo().get(topicName).getPartitionMasterNode()
                 //получаем информацию по каждой node из директорий
                 .stream()
-                .map(directory -> nodesInfo.get(directory))
+                .map(directory -> directoryToNodesInfo.get(directory))
                 .map(this::getAddressFromHostAndPort)
                 .collect(Collectors.toSet());
     }
 
     @Override
-    public Set<String> getAllNodesAddress() {
-        return nodesInfo.values().stream().map(this::getAddressFromHostAndPort).collect(Collectors.toSet());
+    public Set<String> getAllNodesHost() {
+        return directoryToNodesInfo.values().stream().map(this::getAddressFromHostAndPort).collect(Collectors.toSet());
+    }
+
+    @Override
+    public Set<String> getAllTopicName() {
+        return rootInfo.getTopicNameToInfo().keySet();
+    }
+
+
+    @Override
+    public int getCountPartition() {
+        return rootInfo.getCountPartition();
+    }
+
+    @Override
+    public String getCurrentNodeId() {
+        return currentNodeId;
+    }
+
+    @Override
+    public void addNewTopicInfo(String topicName, Set<String> partitionHost) {
+        Set<String> directoryNewPartition = directoryToNodesInfo.values().stream()
+                .filter(info -> partitionHost.contains(info.getHost()))
+                .map(NodeInfo::getNodeId)
+                .collect(Collectors.toSet());
+        rootInfo.addNewTopic(new TopicInfo(topicName, directoryNewPartition));
+        curatorZooKeeper.updateMetaInfo(rootInfo);
     }
 
     private String getAddressFromHostAndPort(NodeInfo nodeInfo) {
@@ -62,6 +92,6 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
     }
 
     public void updateReplicaHosts(Collection<NodeInfo> nodesInfo) {
-        this.nodesInfo = nodesInfo.stream().collect(Collectors.toMap(NodeInfo::getNodeId, node -> node));
+        this.directoryToNodesInfo = nodesInfo.stream().collect(Collectors.toMap(NodeInfo::getNodeId, node -> node));
     }
 }

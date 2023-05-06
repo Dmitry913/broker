@@ -56,6 +56,23 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
         }
     }
 
+    @Override
+    public void updateMetaInfo(MetaInfoZK metaInfo) {
+        setData(rootDirectory, metaInfo);
+    }
+
+    // создаёт путь с такими данными или обновляет существующие
+    private <T> void setData(String path, T info) {
+        ModelSpec<T> spec = ModelSpec.builder(
+                        ZPath.parseWithIds(path),
+                        JacksonModelSerializer.build((Class<T>) info.getClass()))
+                .build();
+        ModeledFramework<T> modeledClient = ModeledFramework.wrap(curatorFramework, spec);
+        log.info("Set data to " + path);
+        // todo тут нужно как-то обработать ModelStage.exceptionally
+        modeledClient.set(info);
+    }
+
     private <T> T getData(String path, Class<T> tClass) throws ExecutionException, InterruptedException {
         ModelSpec<T> spec = ModelSpec.builder(
                         ZPath.parseWithIds(path),

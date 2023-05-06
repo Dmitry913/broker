@@ -2,11 +2,13 @@ package org.wasend.broker.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.wasend.broker.dto.ProducerMessage;
+import org.wasend.broker.dto.BrokerMessage;
 import org.wasend.broker.service.interfaces.MessageService;
 import org.wasend.broker.service.mapper.MapperFactory;
 import org.wasend.broker.service.model.MessageModel;
@@ -23,9 +25,20 @@ public class BrokerController {
 
     @PostMapping("/updateReplica")
     // todo тут нужно реализовать механизм принятия сообщений
-    public void addReplica(@RequestBody ProducerMessage message) {
+    public void addReplicaMessage(@RequestBody BrokerMessage message) {
         MessageModel model = mapperFactory.mapTo(message, MessageModel.class);
         model.setReplica(true);
         messageService.addMessage(model);
+    }
+
+    @PostMapping("/addMessage")
+    // Отдельный метод для брокера, т.к. возможно будет разное логирование + чтобы не загружать тот класс
+    public void addMasterMessage(@RequestBody BrokerMessage message) {
+        messageService.addMessage(mapperFactory.mapTo(message, MessageModel.class));
+    }
+
+    @GetMapping("/countMessages")
+    public Integer countMessage() {
+        return messageService.getCountMessage();
     }
 }

@@ -1,5 +1,6 @@
 package org.wasend.broker.service.interfaces;
 
+import org.wasend.broker.service.model.MessageModel;
 import org.wasend.broker.service.model.SyncMessage;
 
 /**
@@ -17,12 +18,18 @@ public interface MessageSender {
     /**
      * Метод для синхронизации сообщений между очередями
      */
-    void syncMessage(SyncMessage message, String topicName);
+    void sendSynchronizationMessage(SyncMessage message, String topicName);
 
     /**
      * Метод для синхронизации адресов всех зарегистрировавшихся consumer-ов.
      */
     // todo Адрес консьюмеров должна определить и прислать клиентская библиотека
-    void syncMessage(SyncMessage message);
+    void sendSynchronizationMessage(SyncMessage message);
+
+    /**
+     * Пересылаем сообщение на другой узел в ходе балансировки нагрузки
+     */
+    // todo реализовать
+    void delegateMessage(MessageModel producerMessage, String addressNode);
 
 }

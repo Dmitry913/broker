@@ -17,4 +17,6 @@ public interface CuratorZooKeeper {
      * Позволяет получить информацию об узле по директории
      */
     NodeInfo getNodeInfoByDirectory(String directory);
+
+    void updateMetaInfo(MetaInfoZK metaInfo);
 }

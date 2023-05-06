@@ -21,8 +21,15 @@ public interface QueueRepository {
 
     /**
      * Зарегистрировать нового consumer-а
-     * @param model
-     * @return
      */
     boolean registry(RegistryModel model);
+
+    /**
+     * Возвращает кол-во сообщений, для которых является master-node, найденные по названию топика
+     */
+    int getMessagesCount(String topicName);
+    /**
+     * Возвращает кол-во сообщений, для которых является master-node
+     */
+    int getAllMessageCount();
 }

@@ -16,9 +16,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
+
+import static org.wasend.broker.utils.HelpUtils.getWithProtocol;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +30,7 @@ public class MessageSenderImpl implements MessageSender {
     private final ZooKeeperRepository zooKeeperRepository;
     @Value("replica.protocol")
     private final String replicaProtocol;
+    private final static String PATH_FOR_SYNCHRONIZATION = "/v1/broker/updateReplica";
 
     // todo можно было бы запустить в несколько потоков данное действие
     //  (но у них у всех должен быть один Repository, и если один поток забрал сообщение, то другой уже не должен брать его)
@@ -64,28 +65,22 @@ public class MessageSenderImpl implements MessageSender {
     }
 
     @Override
-    public void syncMessage(SyncMessage message) {
-        generateFluxForSyncMessage(
+    public void sendSynchronizationMessage(SyncMessage message) {
+        generateFluxForSynchronizationMessage(
                 message,
-                getWithProtocol(zooKeeperRepository.getAllNodesAddress(), replicaProtocol)
+                getWithProtocol(zooKeeperRepository.getAllNodesHost(), replicaProtocol, PATH_FOR_SYNCHRONIZATION)
         ).subscribe();
     }
 
     @Override
-    public void syncMessage(SyncMessage message, String topicName) {
-        generateFluxForSyncMessage(
+    public void sendSynchronizationMessage(SyncMessage message, String topicName) {
+        generateFluxForSynchronizationMessage(
                 message,
-                getWithProtocol(zooKeeperRepository.getReplicasAddress(topicName), replicaProtocol)
+                getWithProtocol(zooKeeperRepository.getReplicasAddress(topicName), replicaProtocol, PATH_FOR_SYNCHRONIZATION)
         ).subscribe();
     }
 
-    private List<String> getWithProtocol(Collection<String> hosts, String protocol) {
-        return hosts.stream()
-                .map(host -> protocol + host)
-                .collect(Collectors.toList());
-    }
-
-    private Flux<String> generateFluxForSyncMessage(SyncMessage message, Collection<String> collection) {
+    private Flux<String> generateFluxForSynchronizationMessage(SyncMessage message, Collection<String> collection) {
         return Flux.fromIterable(collection)
                 // нет смысла делать параллельно, так как кол-во реплик и кол-во получателей сообщений имеют разные порядки
                 .flatMap(address -> {

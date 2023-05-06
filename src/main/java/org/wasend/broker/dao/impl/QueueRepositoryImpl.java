@@ -14,7 +14,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 
@@ -25,6 +27,7 @@ public class QueueRepositoryImpl implements QueueRepository {
     private final DataStructure<MessageModel> dataStructure;
     // todo перенести хранение в файл
     private final Set<String> urlConsumers;
+    private final Map<String, Integer> topicNameToCountMasterMessage;
     private final Flux<MessageModel> messageExchanger;
     private FluxSink<MessageModel> publisher;
     @Value("seconds.before.sending")
@@ -35,8 +38,11 @@ public class QueueRepositoryImpl implements QueueRepository {
         messageExchanger = Flux.<MessageModel>create(fluxSink -> publisher = fluxSink);
         dataStructure = new DataStructureProducerMessage();
         urlConsumers = new HashSet<>();
+        // todo нужно обновлять значение, если мы вдруг стали мастером, для одной из наших реплик
+        topicNameToCountMasterMessage = new HashMap<>();
         // т.к. поток асинхронный, нужно дождаться момента, пока переменная publisher не инициализируется
-        while (publisher == null) {}
+        while (publisher == null) {
+        }
     }
 
     // todo можно завернуть в аспект, чтобы пушить как-то (подумать над механизмом тригера функции (может как-то через коллБек/аспекты/ивенты/флакс)
@@ -48,6 +54,11 @@ public class QueueRepositoryImpl implements QueueRepository {
             publisher.next(model);
         }
         dataStructure.add(model);
+        if (!model.isReplica()) {
+            topicNameToCountMasterMessage.put(
+                    model.getTopicName(),
+                    topicNameToCountMasterMessage.getOrDefault(model.getTopicName(), 0) + 1);
+        }
     }
 
     // todo нужно обработать кейс, когда тут висит в ожидание сообщение, которое ждёт своего времени обработки,
@@ -55,20 +66,29 @@ public class QueueRepositoryImpl implements QueueRepository {
     @Override
     @EventListener
     public MessageModel getMessage() {
-        // todo в качестве оптимизации можно было доставать события пачками и отслежить у них дедлайн пачками
-        // todo надо как-то выгодно распределять события между брокерами, иначе при большой загрузке (миллионы сообщений для отправки в одно и то же время) есть шанс пропустить дедлайн
-        //  (решение - возможно, чтобы несколько брокеров могли смотреть одни и те же промежутки времени??)
+        // todo в качестве оптимизации можно было доставать события пачками и отслеживать у них дедлайн пачками
         MessageLinker linker = new MessageLinker(dataStructure.getMin());
         messageExchanger.subscribe(linker::setLink);
         /** Мониторит постоянно дедлайн линкера (своего рода вотчер).
          *  Реализовано так, потому что может прийти сообщение с более ранним дедлайном.
          *  При этом важно, чтобы сообщение не уходило на отправку раньше, чем определено в переменной secondBeforeSending.
          *  */
-        //  todo возможно существует какое-то более эффективное решение через пуш систему
+        // TODO Можно было бы поставить данный поток на ожидание, а в методе subscribe разбудить данный поток.
         while (linker.getLink().getDeadLine().isBefore(LocalDateTime.now().plusSeconds(secondBeforeSending))) {
         }
         return linker.getLink();
     }
+
+    @Override
+    public boolean registry(RegistryModel model) {
+        return urlConsumers.add(model.getUrl());
+    }
+
+    @Override
+    public int getMessagesCount(String topicName) {
+        return topicNameToCountMasterMessage.get(topicName);
+    }
+
 
     @Getter
     @Setter
@@ -76,10 +96,5 @@ public class QueueRepositoryImpl implements QueueRepository {
     /** Нужен для привязки сообщений в методе Subscriber.onNext()*/
     private static class MessageLinker {
         private MessageModel link;
-    }
-
-    @Override
-    public boolean registry(RegistryModel model) {
-        return urlConsumers.add(model.getUrl());
     }
 }

@@ -15,6 +15,7 @@ import java.util.List;
 @NoArgsConstructor
 @Builder
 public class MessageModel extends Message {
+    private String masterNode;
     private String topicName;
     private boolean isReplica = false;
     /**

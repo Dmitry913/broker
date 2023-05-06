@@ -1,7 +1,5 @@
 package org.wasend.broker.service.interfaces;
 
-import org.wasend.broker.dto.ConsumerMessage;
-import org.wasend.broker.dto.ProducerMessage;
 import org.wasend.broker.service.model.MessageModel;
 import org.wasend.broker.service.model.RegistryModel;
 

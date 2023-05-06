@@ -1,14 +1,17 @@
 package org.wasend.broker.dao.entity;
 
-import java.util.HashMap;
+import lombok.Getter;
+
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Информация, располагающаяся в главной директории.
  */
+@Getter
 public class MetaInfoZK {
     private Map<String, TopicInfo> topicNameToInfo;
-    /**Количество реплик для каждого топика*/
+    /**
+     * Количество реплик для каждого топика
+     */
     private int countReplicas;
 }

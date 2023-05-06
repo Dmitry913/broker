@@ -3,8 +3,6 @@ package org.wasend.broker.zookeeper;
 import org.wasend.broker.dao.entity.MetaInfoZK;
 import org.wasend.broker.dao.entity.NodeInfo;
 
-import java.util.Set;
-
 /**
  * Класс для работы с zooKeeper
  */
@@ -13,10 +11,10 @@ public interface CuratorZooKeeper {
     /**
      * Возвращает информацию из корневой директории
      */
-    MetaInfoZK getRootInfo();
+    MetaInfoZK getRootInfo() throws Exception;
 
     /**
-     * Возвращает информацию из всех дочерних директорий
+     * Позволяет получить информацию об узле по директории
      */
-    Set<NodeInfo> getAllNodes();
+    NodeInfo getNodeInfoByDirectory(String directory);
 }

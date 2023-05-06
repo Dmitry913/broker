@@ -1,18 +1,18 @@
 package org.wasend.broker.dao.interfaces;
 
-import org.springframework.stereotype.Component;
-
 import java.util.Set;
 
 /**
  * Класс для работы с метаИнформацией (адреса реплик; кто master, а кто slave)
  */
-public interface MetaInfoRepository {
-
+public interface ZooKeeperRepository {
     /**
-     * Позволяет получить хосты всех реплик для данного узла
+     * Позволяет получить хосты всех реплик для данного топика
      */
     Set<String> getReplicasAddress(String topicName);
 
+    /**
+     * Позволяет получить хосты всех существующих реплик
+     */
     Set<String> getAllNodesAddress();
 }

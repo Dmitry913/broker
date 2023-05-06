@@ -2,10 +2,11 @@ package org.wasend.broker.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.wasend.broker.dao.interfaces.MetaInfoRepository;
+import org.wasend.broker.dao.interfaces.ZooKeeperRepository;
 import org.wasend.broker.dao.interfaces.QueueRepository;
 import org.wasend.broker.exception.SendingMessageException;
 import org.wasend.broker.service.interfaces.MessageSender;
@@ -15,7 +16,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +27,9 @@ public class MessageSenderImpl implements MessageSender {
 
     private final WebClient webClient;
     private final QueueRepository queueRepository;
-    private final MetaInfoRepository metaInfoRepository;
+    private final ZooKeeperRepository zooKeeperRepository;
+    @Value("replica.protocol")
+    private final String replicaProtocol;
 
     // todo можно было бы запустить в несколько потоков данное действие
     //  (но у них у всех должен быть один Repository, и если один поток забрал сообщение, то другой уже не должен брать его)
@@ -60,12 +65,24 @@ public class MessageSenderImpl implements MessageSender {
 
     @Override
     public void syncMessage(SyncMessage message) {
-        generateFluxForSyncMessage(message, metaInfoRepository.getAllNodesAddress()).subscribe();
+        generateFluxForSyncMessage(
+                message,
+                getWithProtocol(zooKeeperRepository.getAllNodesAddress(), replicaProtocol)
+        ).subscribe();
     }
 
     @Override
     public void syncMessage(SyncMessage message, String topicName) {
-        generateFluxForSyncMessage(message, metaInfoRepository.getReplicasAddress(topicName)).subscribe();
+        generateFluxForSyncMessage(
+                message,
+                getWithProtocol(zooKeeperRepository.getReplicasAddress(topicName), replicaProtocol)
+        ).subscribe();
+    }
+
+    private List<String> getWithProtocol(Collection<String> hosts, String protocol) {
+        return hosts.stream()
+                .map(host -> protocol + host)
+                .collect(Collectors.toList());
     }
 
     private Flux<String> generateFluxForSyncMessage(SyncMessage message, Collection<String> collection) {
@@ -90,6 +107,6 @@ public class MessageSenderImpl implements MessageSender {
                             });
                 })
                 // todo можно отправить админам письмо на почту, о недоступности данной ноды
-                .doOnError(e -> ((SendingMessageException)e).getUrl());
+                .doOnError(e -> ((SendingMessageException) e).getUrl());
     }
 }

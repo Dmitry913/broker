@@ -13,7 +13,7 @@ import org.wasend.broker.dao.entity.NodeInfo;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static org.apache.zookeeper.Watcher.Event.EventType.NodeDataChanged;
 
@@ -28,20 +28,46 @@ import static org.apache.zookeeper.Watcher.Event.EventType.NodeDataChanged;
 public class CuratorZooKeeperImpl implements CuratorZooKeeper {
 
     private static final String TEST_PATH = "/test3";
+    // todo а нужен ли мне вообще асинхронный клиент, если я завязался на асинхрон на уровне вызова методов данного класса?
     private final AsyncCuratorFramework curatorFramework;
+    // todo можно определять корневую директорию самому на этапе создания объекта данного класса
+    private final String rootDirectory = "/root";
 
 
     @Override
-    // todo реализовать
-    public MetaInfoZK getRootInfo() {
-        return null;
+    public MetaInfoZK getRootInfo() throws Exception {
+        try {
+            curatorFramework.sync().forPath(rootDirectory).toCompletableFuture().get();
+            return getData(rootDirectory, MetaInfoZK.class);
+        } catch (Exception e) {
+            log.error("Can't read info from zooKeeper by path: " + rootDirectory);
+            throw new Exception(e);
+        }
     }
 
     @Override
-    // todo реализовать
-    public Set<NodeInfo> getAllNodes() {
-        return null;
+    public NodeInfo getNodeInfoByDirectory(String directory) {
+        try {
+            String correctDirectory = rootDirectory + "/" + directory;
+            return getData(correctDirectory, NodeInfo.class);
+        } catch (Exception e) {
+            log.error("Can't read info from zooKeeper by path: " + directory);
+            throw new RuntimeException(e);
+        }
     }
+
+    private <T> T getData(String path, Class<T> tClass) throws ExecutionException, InterruptedException {
+        ModelSpec<T> spec = ModelSpec.builder(
+                        ZPath.parseWithIds(path),
+                        JacksonModelSerializer.build(tClass))
+                .build();
+        ModeledFramework<T> modeledClient = ModeledFramework.wrap(curatorFramework, spec);
+        return modeledClient.read().toCompletableFuture().get();
+    }
+
+
+
+
 
     // todo навесить вотчеры на корневую директорию для отслеживания изменения данных и для отслеживания дочерних директория (ноды)
 
@@ -101,7 +127,6 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
         setData(NodeConfigInfo.builder().host("32").port(5).nodeIdOfStoredReplicas(Collections.singletonList("a23d")).build(), TEST_PATH);
         Thread.sleep(11000);
     }
-
 
     // создаёт путь с такими данными или обновляет существующие
     private void setData(NodeConfigInfo nodeConfigInfo, String path) {

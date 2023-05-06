@@ -21,6 +21,7 @@ public class MessageServiceImpl implements MessageService {
 
     @Override
     public void addMessage(MessageModel producerMessage) {
+
         // сохраняем сообщение в наше хранилище
         repository.addMessage(producerMessage);
         // отправляем сообщение для синхронизации другим брокерам

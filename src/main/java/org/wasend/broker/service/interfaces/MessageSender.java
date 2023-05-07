@@ -29,7 +29,6 @@ public interface MessageSender {
     /**
      * Пересылаем сообщение на другой узел в ходе балансировки нагрузки
      */
-    // todo реализовать
-    void delegateMessage(MessageModel producerMessage, String addressNode);
+    void delegateMessage(MessageModel producerMessage, String hostNode);
 
 }

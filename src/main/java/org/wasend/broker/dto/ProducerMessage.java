@@ -9,13 +9,14 @@ import org.wasend.broker.service.model.Message;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
+@Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
-public class ProducerMessage {
+public class ProducerMessage extends Message {
     private String topicName;
     /**
      * передаваемая информация
@@ -28,7 +29,7 @@ public class ProducerMessage {
      * при ask = 1, producer ждёт подтверждения от leader-replica
      * при ask = 2, producer ждёт подтверждения от всех insync-replica
      */
-    private int ask;
+    private Integer ask;
     /**
      * Получатели сообщений. Содержит в себе id существующих получателей
      */

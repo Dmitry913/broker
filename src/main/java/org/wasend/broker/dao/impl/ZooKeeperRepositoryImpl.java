@@ -66,6 +66,15 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
         return rootInfo.getTopicNameToInfo().keySet();
     }
 
+    @Override
+    public Set<String> getAllNodeDirectory() {
+        return directoryToNodesInfo.keySet();
+    }
+
+    @Override
+    public String getHostByDirectory(String directory) {
+        return getAddressFromHostAndPort(directoryToNodesInfo.get(directory));
+    }
 
     @Override
     public int getCountPartition() {
@@ -78,10 +87,10 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
     }
 
     @Override
-    public void addNewTopicInfo(String topicName, Set<String> partitionHost) {
+    public void addNewTopicInfo(String topicName, Set<String> partitionDirectory) {
         Set<String> directoryNewPartition = directoryToNodesInfo.values().stream()
-                .filter(info -> partitionHost.contains(info.getHost()))
                 .map(NodeInfo::getNodeId)
+                .filter(partitionDirectory::contains)
                 .collect(Collectors.toSet());
         rootInfo.addNewTopic(new TopicInfo(topicName, directoryNewPartition));
         curatorZooKeeper.updateMetaInfo(rootInfo);

@@ -89,6 +89,10 @@ public class QueueRepositoryImpl implements QueueRepository {
         return topicNameToCountMasterMessage.get(topicName);
     }
 
+    @Override
+    public int getAllMessageCount() {
+        return topicNameToCountMasterMessage.values().stream().mapToInt(Integer::intValue).sum();
+    }
 
     @Getter
     @Setter

@@ -8,6 +8,6 @@ import java.util.Set;
 // todo можно было бы перенести логику по распределению нагрузки из сервиса MessageService так же в этот сервис
 public interface PartitionService {
 
-    Set<String> getNodesForNewTopic();
+    Set<String> getDirectoryNodesForNewTopic();
 
 }

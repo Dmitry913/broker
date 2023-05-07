@@ -27,9 +27,9 @@ public class MessageServiceImpl implements MessageService {
     private final PartitionService partitionService;
     /**
      * Используется для равномерного распределения сообщений между партициями - балансировка нагрузки
-     * Формат - <topicName to <PartitionAddress to countMessage>>
+     * Формат - <topicName to <PartitionDirectory to countMessage>>
      */
-    // todo раз в какой-то период обновлять информацию о партициях
+    // todo раз в какой-то период обновлять информацию о партициях (в случае, если кол-во реплик и партиций будет отличаться)
     private final Map<String, Map<String, Integer>> topicToCountMessageNode;
 
     @Override
@@ -44,10 +44,10 @@ public class MessageServiceImpl implements MessageService {
         // проверяем, создаётся ли новый топик
         if (isNewTopic) {
             // получаем наименее нагруженные узлы
-            Set<String> partitionNodes = partitionService.getNodesForNewTopic();
+            Set<String> partitionDirectoryNodes = partitionService.getDirectoryNodesForNewTopic();
             // назначаем новому топику партиции(узлы, выбранные выше)
-            zooKeeperRepository.addNewTopicInfo(producerMessage.getTopicName(), partitionNodes);
-            topicToCountMessageNode.put(producerMessage.getTopicName(), partitionNodes.stream().collect(Collectors.toMap(node -> node, node -> 0)));
+            zooKeeperRepository.addNewTopicInfo(producerMessage.getTopicName(), partitionDirectoryNodes);
+            topicToCountMessageNode.put(producerMessage.getTopicName(), partitionDirectoryNodes.stream().collect(Collectors.toMap(node -> node, node -> 0)));
         }
         // обновляем информацию по распределению сообщений между партиция
         if (producerMessage.isReplica()) {
@@ -76,11 +76,11 @@ public class MessageServiceImpl implements MessageService {
 
     private void saveOnOtherNode(MessageModel producerMessage) {
         // находим узел, на котором меньше всего сообщений
-        String nodeWithMinMessage = topicToCountMessageNode.get(producerMessage.getTopicName())
+        String nodeDirectoryWithMinMessage = topicToCountMessageNode.get(producerMessage.getTopicName())
                 .entrySet()
                 .stream()
                 .min(Map.Entry.comparingByValue()).get().getKey();
-        messageSender.delegateMessage(producerMessage, nodeWithMinMessage);
+        messageSender.delegateMessage(producerMessage, zooKeeperRepository.getHostByDirectory(nodeDirectoryWithMinMessage));
     }
 
     private void saveOnThisNode(MessageModel producerMessage) {

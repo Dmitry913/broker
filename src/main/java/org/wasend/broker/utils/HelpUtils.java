@@ -8,7 +8,11 @@ public class HelpUtils {
 
     public static List<String> getWithProtocol(Collection<String> hosts, String protocol, String path) {
         return hosts.stream()
-                .map(host -> protocol + host + path)
+                .map(host -> mapHostToUrl(host, protocol, path))
                 .collect(Collectors.toList());
+    }
+
+    public static String mapHostToUrl(String host, String protocol, String path) {
+        return protocol + "://" + host + path;
     }
 }

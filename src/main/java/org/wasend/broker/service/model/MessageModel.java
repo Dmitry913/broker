@@ -8,11 +8,10 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
-@AllArgsConstructor
-@NoArgsConstructor
 @Builder
 public class MessageModel extends Message {
     private String masterNode;
@@ -35,4 +34,5 @@ public class MessageModel extends Message {
      */
     // todo организовать механизм синхронизации на всех нодах, при добавлении нового получателя
     private List<String> sendTo;
+
 }

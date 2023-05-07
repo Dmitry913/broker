@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.wasend.broker.utils.HelpUtils.getWithProtocol;
+import static org.wasend.broker.utils.HelpUtils.mapHostToUrl;
 
 @Service
 @RequiredArgsConstructor
@@ -29,20 +29,20 @@ public class PartitionServiceImpl implements PartitionService {
     private String replicaProtocol;
 
     @Override
-    public Set<String> getNodesForNewTopic() {
-        Map<String, Integer> hostToCountMessage = new HashMap<>();
-        Flux.fromIterable(getWithProtocol(zooKeeperRepository.getAllNodesHost(), replicaProtocol, "/v1/broker/countMessages"))
-                .flatMap(address ->
+    public Set<String> getDirectoryNodesForNewTopic() {
+        Map<String, Integer> directoryNodeToCountMessage = new HashMap<>();
+        Flux.fromIterable(zooKeeperRepository.getAllNodeDirectory())
+                .flatMap(directory ->
                         Mono.just(new Pair<>(
-                                address,
+                                directory,
                                 webClient.get()
-                                        .uri(address)
+                                        .uri(mapHostToUrl(zooKeeperRepository.getHostByDirectory(directory),replicaProtocol,"/v1/broker/countMessages"))
                                         // todo политика retry и обработка ошибок
                                         .retrieve().bodyToMono(Integer.TYPE)))
                 )
                 // todo возможно можно оптимизировать
-                .subscribe(pair -> hostToCountMessage.put(pair.getFirst(), pair.getLast().block()));
-        return hostToCountMessage.entrySet().stream()
+                .subscribe(pair -> directoryNodeToCountMessage.put(pair.getFirst(), pair.getLast().block()));
+        return directoryNodeToCountMessage.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue())
                 .map(Map.Entry::getKey)
                 // todo сейчас для упрощения сделано так, что сообщение для нового топика всегда будет сохранятся на данном узле

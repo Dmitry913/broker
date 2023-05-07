@@ -21,9 +21,13 @@ public interface ZooKeeperRepository {
      */
     Set<String> getAllTopicName();
 
+    Set<String> getAllNodeDirectory();
+
+    String getHostByDirectory(String directory);
+
     int getCountPartition();
 
     String getCurrentNodeId();
 
-    void addNewTopicInfo(String topicName, Set<String> partitionHost);
+    void addNewTopicInfo(String topicName, Set<String> partitionDirectory);
 }

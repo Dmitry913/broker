@@ -1,12 +1,13 @@
 package org.wasend.broker.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.wasend.broker.dao.interfaces.QueueRepository;
 import org.wasend.broker.dao.interfaces.ZooKeeperRepository;
 import org.wasend.broker.service.interfaces.MessageSender;
 import org.wasend.broker.service.interfaces.MessageService;
-import org.wasend.broker.service.interfaces.PartitionService;
+import org.wasend.broker.service.interfaces.BalancerPartitionService;
 import org.wasend.broker.service.mapper.MapperFactory;
 import org.wasend.broker.service.model.MessageModel;
 import org.wasend.broker.service.model.RegistryModel;
@@ -24,12 +25,13 @@ public class MessageServiceImpl implements MessageService {
     private final QueueRepository queueRepository;
     private final ZooKeeperRepository zooKeeperRepository;
     private final MapperFactory mapperFactory;
-    private final PartitionService partitionService;
+    private final BalancerPartitionService balancerPartitionService;
     /**
      * Используется для равномерного распределения сообщений между партициями - балансировка нагрузки (информация только о master-node)
      * Формат - <topicName to <PartitionMasterId to countMessage>>
      */
     // todo раз в какой-то период обновлять информацию о партициях (в случае, если кол-во реплик и партиций будет отличаться)
+    // todo данная переменная должна быть в queueRepository, так как она содержит в себе только те топики, где данный брокер владеет партицией и используется для балансировки сообщений в рамках этих топиков
     private final Map<String, Map<String, Integer>> topicToCountMessageNode;
 
     @Override
@@ -44,7 +46,7 @@ public class MessageServiceImpl implements MessageService {
         // проверяем, создаётся ли новый топик
         if (isNewTopic) {
             // получаем наименее нагруженные узлы
-            Set<String> partitionDirectoryNodes = partitionService.getDirectoryNodesForNewTopic();
+            Set<String> partitionDirectoryNodes = balancerPartitionService.getDirectoryNodesForNewTopic();
             // добавляем текущий узел
             partitionDirectoryNodes.add(zooKeeperRepository.getCurrentDirectoryNode());
             // назначаем новому топику партиции(узлы, выбранные выше)
@@ -54,6 +56,7 @@ public class MessageServiceImpl implements MessageService {
         // обновляем информацию по распределению сообщений между партиция
         if (producerMessage.isReplica()) {
             Map<String, Integer> partitionToCountMessage = topicToCountMessageNode.get(producerMessage.getTopicName());
+            // todo можно подтащить данную информацию из queueRepository, а не обновлять её тут
             partitionToCountMessage.put(producerMessage.getPartitionId(), partitionToCountMessage.getOrDefault(producerMessage.getPartitionId(), 0) + 1);
         }
         // балансировка нагрузки - распределения сообщений
@@ -107,4 +110,5 @@ public class MessageServiceImpl implements MessageService {
     public Integer getCountMessage() {
         return queueRepository.getAllMessageCount();
     }
+
 }

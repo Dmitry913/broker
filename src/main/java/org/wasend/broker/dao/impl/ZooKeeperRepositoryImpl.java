@@ -2,13 +2,13 @@ package org.wasend.broker.dao.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Repository;
 import org.wasend.broker.dao.entity.MetaInfoZK;
 import org.wasend.broker.dao.entity.NodeInfo;
 import org.wasend.broker.dao.entity.TopicInfo;
 import org.wasend.broker.dao.interfaces.ZooKeeperRepository;
+import org.wasend.broker.eventObjects.MetaInfo;
 import org.wasend.broker.zookeeper.CuratorZooKeeper;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -30,16 +30,22 @@ import java.util.stream.IntStream;
 public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
 
     private final CuratorZooKeeper curatorZooKeeper;
+    /**
+     * Название эфемерной ноды для текущего инстанса
+     */
+    private final String currentNodeId;
     private MetaInfoZK rootInfo;
+    private int rootDirectoryVersion;
     // Возможно стоит сделать синхронной(блокирующей)?
     private Map<String, NodeInfo> directoryToNodesInfo;
-    @Value("zooKeeper.current.nodeId")
-    private String currentNodeId;
 
     @Autowired
     public ZooKeeperRepositoryImpl(CuratorZooKeeper curatorZooKeeper) throws Exception {
         this.curatorZooKeeper = curatorZooKeeper;
-        rootInfo = curatorZooKeeper.getRootInfo();
+        this.currentNodeId = curatorZooKeeper.instanceNodeId();
+        MetaInfo metaInfo = curatorZooKeeper.getRootInfo();
+        rootInfo = metaInfo.getMetaInfoZK();
+        rootDirectoryVersion = metaInfo.getRootDirectoryVersion();
         initNodesInfo();
     }
 
@@ -112,11 +118,9 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
                 .stream()
                 .filter(entry -> topicPartitionId.contains(entry.getKey()))
                 .filter(entry -> entry.getValue().equals(currentNodeId))
+                .map(Map.Entry::getKey)
                 .findAny()
-                .orElseThrow(() -> {
-                    log.error("Failed to find master-partitionId for this node in topic-" + topicName);
-                    return new RuntimeException();
-                }).getKey();
+                .orElse(null);
     }
 
     @Override
@@ -141,20 +145,85 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
             directoryToPartition.put(iteratorByDirectory.next(), partitionId);
         }
         rootInfo.linkNewPartition(partitionToDirectory);
-        curatorZooKeeper.updateMetaInfo(rootInfo);
+        try {
+            curatorZooKeeper.updateMetaInfo(rootInfo, rootDirectoryVersion);
+        } catch (Exception e) {
+
+        }
         return directoryToPartition;
     }
 
-    @EventListener
-    public void updateMetaData(MetaInfoZK metaInfoZK) {
-        this.rootInfo = metaInfoZK;
+    @Override
+    public Set<String> getPartitionsByDirectoryNode(String directoryNodeId) {
+        return rootInfo.getPartitionIdToNodeDirectoryName().entrySet()
+                .stream()
+                .filter(entry -> entry.getValue().equals(directoryNodeId))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
     }
+
+    @Override
+    public String getTopicByPartitionId(String partitionId) {
+        return rootInfo.getTopicNameToInfo().values()
+                .stream()
+                .filter(topicInfo -> topicInfo.getPartitionsId().contains(partitionId))
+                .map(TopicInfo::getName)
+                .findAny().orElse(null);
+    }
+
+    @Override
+    public Set<String> movePartitionToCurrentInstanceInTransaction(Set<String> addPartitionsOnCurrentInstance, String preferOwner) {
+        Set<String> copyPartitionsId = new HashSet<>(addPartitionsOnCurrentInstance);
+        // отправить партиции на привязку к текущему узлу
+        while (!copyPartitionsId.isEmpty()) {
+            log.info("Attempt to link Partitions:{} with node:{} ", copyPartitionsId, currentNodeId);
+            MetaInfoZK copyMetaInfo = new MetaInfoZK(rootInfo);
+            copyPartitionsId.forEach(partitionId -> copyMetaInfo.getPartitionIdToNodeDirectoryName().put(partitionId, currentNodeId));
+            if (curatorZooKeeper.updateMetaInfo(copyMetaInfo, rootDirectoryVersion)) {
+                log.error("Attempt success");
+                return copyPartitionsId;
+            } else {
+                // если привязка не удалась, нужно исключить из списка партиции, которые успели привязать другие брокеры и отправить запрос заново
+                copyPartitionsId = copyPartitionsId.stream()
+                        .filter(partitionId -> rootInfo.getPartitionIdToNodeDirectoryName().get(partitionId).equals(preferOwner))
+                        .collect(Collectors.toSet());
+            }
+        }
+        return Collections.emptySet();
+    }
+
+
+    @EventListener
+    public void updateMetaData(MetaInfo metaInfo) {
+        this.rootInfo = metaInfo.getMetaInfoZK();
+        this.rootDirectoryVersion = metaInfo.getRootDirectoryVersion();
+    }
+
+    @EventListener
+    // стереть информацию об удалённом узле из zookeeperRepository.directoryToNodeInfo
+    // если добавился новый узел, то надо добавить информацию в zookeeperRepository.directoryToNodeInfo
+    public void actualizeDirectoryToNodesInfo(List<String> livingNodes) {
+        Set<String> unchangedNodes = new HashSet<>(directoryToNodesInfo.keySet());
+        // пересечение - те директории, которые никак не изменились
+        unchangedNodes.retainAll(livingNodes);
+        Set<String> newNodes = new HashSet<>(livingNodes);
+        newNodes.removeAll(unchangedNodes);
+        Set<NodeInfo> resultNode = directoryToNodesInfo.values()
+                .stream()
+                .filter(nodeInfo -> unchangedNodes.contains(nodeInfo.getNodeId()))
+                .collect(Collectors.toSet());
+        Flux.fromIterable(newNodes).flatMap(directoryName -> Mono.just(curatorZooKeeper.getNodeInfoByDirectory(directoryName))).subscribe(resultNode::add);
+        updateReplicaHosts(resultNode);
+    }
+
 
     private String getAddressFromHostAndPort(NodeInfo nodeInfo) {
         return nodeInfo.getHost() + ":" + nodeInfo.getPort();
     }
 
     public void updateReplicaHosts(Collection<NodeInfo> nodesInfo) {
-        this.directoryToNodesInfo = nodesInfo.stream().collect(Collectors.toMap(NodeInfo::getNodeId, node -> node));
+        this.directoryToNodesInfo = nodesInfo.stream()
+                .peek(nodeInfo -> log.info("Node{} detected and added", nodeInfo.getNodeId()))
+                .collect(Collectors.toMap(NodeInfo::getNodeId, node -> node));
     }
 }

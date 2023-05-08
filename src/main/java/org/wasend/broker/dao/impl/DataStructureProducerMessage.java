@@ -8,7 +8,7 @@ import java.util.PriorityQueue;
 
 public class DataStructureProducerMessage implements DataStructure<MessageModel> {
     // PriorityQueue - временная сложность операций enqueuing и dequeuing O(log(n))
-    // можно было бы сделать свою структуру данных, где операция вставки занимала бы O(lon(n)) - бинарный поиск, а операция извлечения O(1) - при использовании массива постоянного объёма
+    // todo можно было бы сделать свою структуру данных, где операция вставки занимала бы O(lon(n)) - бинарный поиск, а операция извлечения O(1) - при использовании массива постоянного объёма
     private final PriorityQueue<MessageModel> queue;
 
     public DataStructureProducerMessage() {

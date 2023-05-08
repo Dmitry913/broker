@@ -24,9 +24,14 @@ import java.util.Set;
 public class QueueRepositoryImpl implements QueueRepository {
 
     // todo перенести хранение в файл
+    // тут хранятся только сообщения, для которых я мастер-узел, копии стоит хранит в отдельной структуре
     private final DataStructure<MessageModel> dataStructure;
     // todo перенести хранение в файл
     private final Set<String> urlConsumers;
+    // <PartitionId, Set<Message>> - хранит реплики по партициям todo должно хранится в файле
+    private final Map<String, Set<MessageModel>> partitionIdToReplicaPartitionMessages;
+    // количество сообщений по топикам, где я мастер узел
+    // используется, для того чтобы при хранении в файл не лазить каждый раз за этой информацией туда
     private final Map<String, Integer> topicNameToCountMasterMessage;
     private final Flux<MessageModel> messageExchanger;
     private FluxSink<MessageModel> publisher;
@@ -40,6 +45,7 @@ public class QueueRepositoryImpl implements QueueRepository {
         urlConsumers = new HashSet<>();
         // todo нужно обновлять значение, если мы вдруг стали мастером, для одной из наших реплик
         topicNameToCountMasterMessage = new HashMap<>();
+        partitionIdToReplicaPartitionMessages = new HashMap<>();
         // т.к. поток асинхронный, нужно дождаться момента, пока переменная publisher не инициализируется
         while (publisher == null) {
         }
@@ -49,12 +55,17 @@ public class QueueRepositoryImpl implements QueueRepository {
     @Override
     public void addMessage(MessageModel model) {
         // т.к. у нового сообщения дедлайн может быть более ранним, нужно отправлять именно его в сендерФункцию
-        if (model.getDeadLine().isBefore(currentTimeForSend)) {
+        if (!model.isReplica() && model.getDeadLine().isBefore(currentTimeForSend)) {
             currentTimeForSend = model.getDeadLine();
             publisher.next(model);
         }
-        dataStructure.add(model);
-        if (!model.isReplica()) {
+        if (model.isReplica()) {
+            if (!partitionIdToReplicaPartitionMessages.containsKey(model.getPartitionId())) {
+                partitionIdToReplicaPartitionMessages.put(model.getPartitionId(), new HashSet<>());
+            }
+            partitionIdToReplicaPartitionMessages.get(model.getPartitionId()).add(model);
+        } else {
+            dataStructure.add(model);
             topicNameToCountMasterMessage.put(
                     model.getTopicName(),
                     topicNameToCountMasterMessage.getOrDefault(model.getTopicName(), 0) + 1);
@@ -92,6 +103,15 @@ public class QueueRepositoryImpl implements QueueRepository {
     @Override
     public int getAllMessageCount() {
         return topicNameToCountMasterMessage.values().stream().mapToInt(Integer::intValue).sum();
+    }
+
+    @Override
+    public void movePartitionToProcessing(String partitionId) {
+        Set<MessageModel> messageInMovingPartition = partitionIdToReplicaPartitionMessages.get(partitionId);
+        messageInMovingPartition.forEach(message -> message.setReplica(false));
+        Flux.fromIterable(messageInMovingPartition)
+                .subscribe(this::addMessage);
+        partitionIdToReplicaPartitionMessages.remove(partitionId);
     }
 
     @Getter

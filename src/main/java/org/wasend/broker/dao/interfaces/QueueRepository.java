@@ -32,4 +32,6 @@ public interface QueueRepository {
      * Возвращает кол-во сообщений, для которых является master-node
      */
     int getAllMessageCount();
+
+    void movePartitionToProcessing(String partitionId);
 }

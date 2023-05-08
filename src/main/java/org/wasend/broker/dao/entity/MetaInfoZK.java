@@ -1,13 +1,22 @@
 package org.wasend.broker.dao.entity;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Информация, располагающаяся в главной директории.
  */
 @Getter
+@AllArgsConstructor
+@Setter
+@Builder
+@NoArgsConstructor
 public class MetaInfoZK {
     private Map<String, TopicInfo> topicNameToInfo;
 //    /**
@@ -27,5 +36,11 @@ public class MetaInfoZK {
 
     public void linkNewPartition(Map<String, String> partitionToNode) {
         partitionIdToNodeDirectoryName.putAll(partitionToNode);
+    }
+
+    public MetaInfoZK(MetaInfoZK otherMetaInfoZk) {
+        this.topicNameToInfo = new HashMap<>(otherMetaInfoZk.getTopicNameToInfo());
+        this.countPartition = otherMetaInfoZk.getCountPartition();
+        this.partitionIdToNodeDirectoryName = new HashMap<>(otherMetaInfoZk.getPartitionIdToNodeDirectoryName());
     }
 }

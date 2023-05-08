@@ -1,12 +1,13 @@
 package org.wasend.broker.zookeeper;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.x.async.AsyncCuratorFramework;
 import org.apache.curator.x.async.modeled.JacksonModelSerializer;
 import org.apache.curator.x.async.modeled.ModelSpec;
 import org.apache.curator.x.async.modeled.ModeledFramework;
 import org.apache.curator.x.async.modeled.ZPath;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.wasend.broker.dao.entity.MetaInfoZK;
 import org.wasend.broker.dao.entity.NodeInfo;
@@ -15,9 +16,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.zookeeper.Watcher.Event.EventType.ChildWatchRemoved;
 import static org.apache.zookeeper.Watcher.Event.EventType.NodeDataChanged;
 
-@RequiredArgsConstructor
 @Component
 @Slf4j
 // todo нужно обязательно вызывать метод sync, там где нужна согласованность данных,
@@ -32,6 +33,14 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
     private final AsyncCuratorFramework curatorFramework;
     // todo можно определять корневую директорию самому на этапе создания объекта данного класса
     private final String rootDirectory = "/root";
+    private ApplicationEventPublisher applicationEventPublisher;
+
+    @Autowired
+    public CuratorZooKeeperImpl(AsyncCuratorFramework curatorFramework, ApplicationEventPublisher applicationEventPublisher) {
+        this.curatorFramework = curatorFramework;
+        this.applicationEventPublisher = applicationEventPublisher;
+        createRootDirectoryWatcher();
+    }
 
 
     @Override
@@ -82,8 +91,22 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
         return modeledClient.read().toCompletableFuture().get();
     }
 
-
-
+    private void createRootDirectoryWatcher() {
+        curatorFramework.watched()
+                .getData()
+                .forPath(rootDirectory)
+                .event()
+                .thenAccept(watchedEvent -> {
+                    if (watchedEvent.getType().equals(NodeDataChanged)) {
+                        try {
+                            applicationEventPublisher.publishEvent(getRootInfo());
+                        } catch (Exception e) {
+                            log.error("Failed reading updated information");
+                        }
+                        createRootDirectoryWatcher();
+                    }
+                });
+    }
 
 
     // todo навесить вотчеры на корневую директорию для отслеживания изменения данных и для отслеживания дочерних директория (ноды)

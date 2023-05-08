@@ -15,7 +15,7 @@ public class TopicInfo {
     /** Наименование данного топика*/
     private String name;
     /** Название(наименование директории) мастер-узла для каждой партиции*/
-    private Set<String> partitionMasterNode;
+    private Set<String> partitionsId;
 //    /** Идентификаторы узлов, в которых хранятся, копии данной реплики */
 //    private Set<String> replicasPlace;
 //    /** Идентификатор мастер-узла*/

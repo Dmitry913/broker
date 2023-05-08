@@ -26,8 +26,8 @@ public class MessageServiceImpl implements MessageService {
     private final MapperFactory mapperFactory;
     private final PartitionService partitionService;
     /**
-     * Используется для равномерного распределения сообщений между партициями - балансировка нагрузки
-     * Формат - <topicName to <PartitionDirectory to countMessage>>
+     * Используется для равномерного распределения сообщений между партициями - балансировка нагрузки (информация только о master-node)
+     * Формат - <topicName to <PartitionMasterId to countMessage>>
      */
     // todo раз в какой-то период обновлять информацию о партициях (в случае, если кол-во реплик и партиций будет отличаться)
     private final Map<String, Map<String, Integer>> topicToCountMessageNode;
@@ -45,14 +45,16 @@ public class MessageServiceImpl implements MessageService {
         if (isNewTopic) {
             // получаем наименее нагруженные узлы
             Set<String> partitionDirectoryNodes = partitionService.getDirectoryNodesForNewTopic();
+            // добавляем текущий узел
+            partitionDirectoryNodes.add(zooKeeperRepository.getCurrentDirectoryNode());
             // назначаем новому топику партиции(узлы, выбранные выше)
-            zooKeeperRepository.addNewTopicInfo(producerMessage.getTopicName(), partitionDirectoryNodes);
-            topicToCountMessageNode.put(producerMessage.getTopicName(), partitionDirectoryNodes.stream().collect(Collectors.toMap(node -> node, node -> 0)));
+            Map<String, String> directoryToPartition = zooKeeperRepository.addNewTopicInfo(producerMessage.getTopicName(), partitionDirectoryNodes);
+            topicToCountMessageNode.put(producerMessage.getTopicName(), directoryToPartition.values().stream().collect(Collectors.toMap(partitionId -> partitionId, partitionId -> 0)));
         }
         // обновляем информацию по распределению сообщений между партиция
         if (producerMessage.isReplica()) {
             Map<String, Integer> partitionToCountMessage = topicToCountMessageNode.get(producerMessage.getTopicName());
-            partitionToCountMessage.put(producerMessage.getMasterNode(), partitionToCountMessage.getOrDefault(producerMessage.getMasterNode(), 0) + 1);
+            partitionToCountMessage.put(producerMessage.getPartitionId(), partitionToCountMessage.getOrDefault(producerMessage.getPartitionId(), 0) + 1);
         }
         // балансировка нагрузки - распределения сообщений
         if (isNewTopic || isLightlyLoaded(producerMessage)) {
@@ -87,7 +89,7 @@ public class MessageServiceImpl implements MessageService {
         // сохраняем сообщение в наше хранилище
         queueRepository.addMessage(producerMessage);
         // отправляем сообщение для синхронизации другим брокерам
-        producerMessage.setMasterNode(zooKeeperRepository.getCurrentNodeId());
+        producerMessage.setPartitionId(zooKeeperRepository.getMyPartitionId(producerMessage.getTopicName()));
         messageSender.sendSynchronizationMessage(mapperFactory.mapTo(producerMessage, SyncMessage.class), producerMessage.getTopicName());
     }
 

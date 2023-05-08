@@ -1,5 +1,8 @@
 package org.wasend.broker.dao.interfaces;
 
+import org.wasend.broker.dao.entity.MetaInfoZK;
+
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -27,7 +30,13 @@ public interface ZooKeeperRepository {
 
     int getCountPartition();
 
-    String getCurrentNodeId();
+    String getCurrentDirectoryNode();
 
-    void addNewTopicInfo(String topicName, Set<String> partitionDirectory);
+    /**
+     * Возвращает идентификатор партиции, в которой текущий узел является мастером, по названию топика
+     */
+    String getMyPartitionId(String topicName);
+
+    Map<String, String> addNewTopicInfo(String topicName, Set<String> partitionDirectory);
+
 }

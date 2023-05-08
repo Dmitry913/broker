@@ -14,7 +14,7 @@ import java.util.UUID;
 @Setter
 @Builder
 public class MessageModel extends Message {
-    private String masterNode;
+    private String partitionId;
     private String topicName;
     private boolean isReplica = false;
     /**

@@ -11,5 +11,5 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class BrokerMessage extends ProducerMessage {
-    private String masterNode;
+    private String partitionId;
 }

@@ -12,7 +12,7 @@ public class DataStructureProducerMessage implements DataStructure<MessageModel>
     private final PriorityQueue<MessageModel> queue;
 
     public DataStructureProducerMessage() {
-        queue = new PriorityQueue<>(Comparator.comparing(MessageModel::getDeadLine));
+        queue = new PriorityQueue<>(Comparator.comparing(MessageModel::getDeadline));
     }
 
     @Override

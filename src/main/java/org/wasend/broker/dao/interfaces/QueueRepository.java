@@ -27,11 +27,12 @@ public interface QueueRepository {
     /**
      * Возвращает кол-во сообщений, для которых является master-node, найденные по названию топика
      */
-    int getMessagesCount(String topicName);
+    Integer getMessagesCount(String topicName);
     /**
      * Возвращает кол-во сообщений, для которых является master-node
+     * @return
      */
-    int getAllMessageCount();
+    Integer getAllMessageCount();
 
     void movePartitionToProcessing(String partitionId);
 }

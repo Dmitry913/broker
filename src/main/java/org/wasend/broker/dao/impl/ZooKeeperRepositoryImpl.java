@@ -74,6 +74,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
                 //получаем информацию по каждой node из директорий
                 .stream()
                 .map(partitionId -> rootInfo.getPartitionIdToNodeDirectoryName().get(partitionId))
+                .filter(nodeDirectory -> !currentNodeId.equals(nodeDirectory))
                 .map(directoryName -> directoryToNodesInfo.get(directoryName))
                 .map(this::getAddressFromHostAndPort)
                 .collect(Collectors.toSet());
@@ -111,7 +112,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
 
     @Override
     // todo лучше как-то поменять формат или ещё что-то, для того чтобы не приходилось каждый раз ревёрсить мапу, т.к. это затратная операция
-    public String getMyPartitionId(String topicName) {
+    public Set<String> getMyPartitionId(String topicName) {
         Set<String> topicPartitionId = rootInfo.getTopicNameToInfo().get(topicName).getPartitionsId();
         return rootInfo.getPartitionIdToNodeDirectoryName()
                 .entrySet()
@@ -119,8 +120,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
                 .filter(entry -> topicPartitionId.contains(entry.getKey()))
                 .filter(entry -> entry.getValue().equals(currentNodeId))
                 .map(Map.Entry::getKey)
-                .findAny()
-                .orElse(null);
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -135,14 +135,18 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
 //                .filter(partitionNodeDirectory::contains)
 //                .collect(Collectors.toSet());
         // привязываем топик к новым партициям
+        log.info("Adding new topic:<{}>", topicName);
         rootInfo.addNewTopic(new TopicInfo(topicName, newPartitions));
         // связываем партиции с узлами
         Map<String, String> partitionToDirectory = new HashMap<>();
         Map<String, String> directoryToPartition = new HashMap<>();
         Iterator<String> iteratorByDirectory = partitionNodeDirectory.iterator();
+        log.info("Starting distribution of partitions:");
         for (String partitionId : newPartitions) {
-            partitionToDirectory.put(partitionId, iteratorByDirectory.next());
-            directoryToPartition.put(iteratorByDirectory.next(), partitionId);
+            String directoryName = iteratorByDirectory.next();
+            partitionToDirectory.put(partitionId, directoryName);
+            log.info("Link <{}> to <{}>", partitionId, directoryName);
+            directoryToPartition.put(directoryName, partitionId);
         }
         rootInfo.linkNewPartition(partitionToDirectory);
         try {
@@ -202,7 +206,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
     @EventListener
     // стереть информацию об удалённом узле из zookeeperRepository.directoryToNodeInfo
     // если добавился новый узел, то надо добавить информацию в zookeeperRepository.directoryToNodeInfo
-    public void actualizeDirectoryToNodesInfo(List<String> livingNodes) {
+    public void actualizeDirectoryToNodesInfo(Set<String> livingNodes) {
         Set<String> unchangedNodes = new HashSet<>(directoryToNodesInfo.keySet());
         // пересечение - те директории, которые никак не изменились
         unchangedNodes.retainAll(livingNodes);

@@ -45,7 +45,7 @@ public interface ZooKeeperRepository {
     /**
      * Возвращает идентификатор партиции, в которой текущий узел является мастером, по названию топика
      */
-    String getMyPartitionId(String topicName);
+    Set<String> getMyPartitionId(String topicName);
 
     Map<String, String> addNewTopicInfo(String topicName, Set<String> partitionDirectory);
 

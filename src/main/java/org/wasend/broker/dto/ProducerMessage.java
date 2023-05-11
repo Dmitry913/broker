@@ -23,7 +23,7 @@ public class ProducerMessage extends Message {
      */
     // todo изменить string в byte[]
     private String payload;
-    private LocalDateTime deadLine;
+    private LocalDateTime deadline;
     /**
      * при ask = 0, producer не ждёт подтверждения
      * при ask = 1, producer ждёт подтверждения от leader-replica

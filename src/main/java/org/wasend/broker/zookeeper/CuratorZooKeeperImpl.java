@@ -1,5 +1,6 @@
 package org.wasend.broker.zookeeper;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.x.async.AsyncCuratorFramework;
@@ -8,9 +9,11 @@ import org.apache.curator.x.async.modeled.ModelSpec;
 import org.apache.curator.x.async.modeled.ModeledFramework;
 import org.apache.curator.x.async.modeled.ZNode;
 import org.apache.curator.x.async.modeled.ZPath;
+import org.apache.curator.x.async.modeled.details.ZNodeImpl;
 import org.apache.curator.x.async.modeled.versioned.Versioned;
 import org.apache.curator.x.async.modeled.versioned.VersionedModeledFramework;
 import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.data.Stat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -19,9 +22,9 @@ import org.wasend.broker.dao.entity.MetaInfoZK;
 import org.wasend.broker.dao.entity.NodeInfo;
 import org.wasend.broker.eventObjects.MetaInfo;
 
+import javax.xml.soap.Node;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.apache.zookeeper.Watcher.Event.EventType.NodeChildrenChanged;
@@ -39,23 +42,29 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
     private static final String TEST_PATH = "/test3";
     // todo а нужен ли мне вообще асинхронный клиент, если я завязался на асинхрон на уровне вызова методов данного класса?
     private final AsyncCuratorFramework asyncCuratorFramework;
-    private final CuratorFramework curatorFramework;
+    private final CuratorFramework syncCuratorFramework;
     // todo можно определять корневую директорию самому на этапе создания объекта данного класса
     private final String rootDirectory = "/root";
     private final String directoryInstanceName;
     private final ApplicationEventPublisher applicationEventPublisher;
-    @Value("prefix.ephemeral.node")
-    private String prefixEphemeralNode;
+    private final String prefixEphemeralNode;
+    private final ObjectMapper objectMapper;
 
     @Autowired
     public CuratorZooKeeperImpl(AsyncCuratorFramework asyncCuratorFramework,
                                 ApplicationEventPublisher applicationEventPublisher,
-                                CuratorFramework curatorFramework) {
+                                CuratorFramework syncCuratorFramework,
+                                @Value("${prefix.ephemeral.node}") String prefixEphemeralNode,
+                                @Value("${external.node.host}") String externalHost,
+                                @Value("${external.node.port}") String externalPort) {
         this.asyncCuratorFramework = asyncCuratorFramework;
         this.applicationEventPublisher = applicationEventPublisher;
-        this.curatorFramework = curatorFramework;
+        this.syncCuratorFramework = syncCuratorFramework;
+        this.objectMapper = new ObjectMapper();
+        this.prefixEphemeralNode = prefixEphemeralNode;
         // todo создать ноду в директории cluster, как только приложение запустилось (nodeId данного узла взять из zooKeeper.current.nodeId)
-        directoryInstanceName = createEphemeralNode();
+        directoryInstanceName = createEphemeralNode(externalHost, externalPort);
+        log.info("EphemeralNode success created with nodeId - " + directoryInstanceName);
         createRootDirectoryWatcher();
         createChildrenWatcher();
     }
@@ -64,8 +73,11 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
     @Override
     public MetaInfo getRootInfo() throws Exception {
         try {
-            asyncCuratorFramework.sync().forPath(rootDirectory).toCompletableFuture().get();
+            // Todo возможно синхронизация не нужна (в целом это затратная операция)
+            syncCuratorFramework.sync().forPath(rootDirectory);
+            log.info("Start getting rooInfo from ZooKeeper");
             ZNode<MetaInfoZK> zNode = getData(rootDirectory, MetaInfoZK.class);
+            log.info("Success reading rootInfo(version={}):{}", zNode.stat().getVersion(), zNode.model().toString());
             return new MetaInfo(zNode.stat().getVersion(), zNode.model());
         } catch (Exception e) {
             log.error("Can't read info from zooKeeper by path: " + rootDirectory);
@@ -108,28 +120,43 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
 
     // создаёт путь с такими данными или обновляет существующие
     private <T> boolean setData(String path, T info, int version) {
-        ModelSpec<T> spec = ModelSpec.builder(
-                        ZPath.parseWithIds(path),
-                        JacksonModelSerializer.build((Class<T>) info.getClass()))
-                .build();
-        VersionedModeledFramework<T> versionedModeledClient = ModeledFramework.wrap(asyncCuratorFramework, spec).versioned();
+//        ModelSpec<T> spec = ModelSpec.builder(
+//                        ZPath.parseWithIds(path),
+//                        JacksonModelSerializer.build((Class<T>) info.getClass()))
+//                .build();
+//        VersionedModeledFramework<T> versionedModeledClient = ModeledFramework.wrap(asyncCuratorFramework, spec).versioned();
         log.info("Set data to " + path);
-        // todo тут нужно как-то обработать ModelStage.exceptionally
         try {
-            versionedModeledClient.set(Versioned.from(info, version)).toCompletableFuture().get();
+            syncCuratorFramework.setData().withVersion(version)
+                    .forPath(path,
+                            objectMapper.writerFor(info.getClass()).writeValueAsBytes(info));
+            log.info("Succes set data to " + path);
             return true;
         } catch (Exception e) {
+            log.error("Failed while set data to {}", path, e);
             return false;
         }
+//        // todo тут нужно как-то обработать ModelStage.exceptionally
+//        try {
+//            versionedModeledClient.set(Versioned.from(info, version)).toCompletableFuture().get();
+//            log.info("Succes set data to " + path);
+//            return true;
+//        } catch (Exception e) {
+//            log.error("Failed while set data to {}", path, e);
+//            return false;
+//        }
     }
 
-    private <T> ZNode<T> getData(String path, Class<T> tClass) throws ExecutionException, InterruptedException {
-        ModelSpec<T> spec = ModelSpec.builder(
-                        ZPath.parseWithIds(path),
-                        JacksonModelSerializer.build(tClass))
-                .build();
-        ModeledFramework<T> modeledClient = ModeledFramework.wrap(asyncCuratorFramework, spec);
-        return modeledClient.readAsZNode().toCompletableFuture().get();
+    private <T> ZNode<T> getData(String path, Class<T> tClass) throws Exception {
+        Stat stat = new Stat();
+        byte[] readBytes = syncCuratorFramework.getData().storingStatIn(stat).forPath(path);
+        return new ZNodeImpl<>(ZPath.parse(path), stat, objectMapper.readerFor(tClass).readValue(readBytes));
+//        ModelSpec<T> spec = ModelSpec.builder(
+//                        ZPath.parseWithIds(path),
+//                        JacksonModelSerializer.build(tClass))
+//                .build();
+//        ModeledFramework<T> modeledClient = ModeledFramework.wrap(asyncCuratorFramework, spec);
+//        return modeledClient.readAsZNode().toCompletableFuture().get();
     }
 
     private void createRootDirectoryWatcher() {
@@ -139,6 +166,7 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
                 .event()
                 .thenAccept(watchedEvent -> {
                     if (watchedEvent.getType().equals(NodeDataChanged)) {
+                        log.info("Received event: rootDirectoryUpdated");
                         try {
                             applicationEventPublisher.publishEvent(getRootInfo());
                         } catch (Exception e) {
@@ -174,9 +202,24 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
                 });
     }
 
-    private String createEphemeralNode() {
+    private String createEphemeralNode(String externalHost, String externalPort) {
         try {
-            return asyncCuratorFramework.create().withMode(CreateMode.EPHEMERAL_SEQUENTIAL).forPath(rootDirectory + "/" + prefixEphemeralNode).toCompletableFuture().get();
+            String nodeId = syncCuratorFramework
+                    .create()
+                    .withMode(CreateMode.EPHEMERAL_SEQUENTIAL)
+                    .forPath(rootDirectory + "/" + prefixEphemeralNode, new byte[]{})
+                    .split("/")[2];
+            NodeInfo myInfo = NodeInfo.builder()
+                    .host(externalHost)
+                    .port(Integer.parseInt(externalPort))
+                    .nodeId(nodeId)
+                    .build();
+            byte[] nodeInfoInBytes = objectMapper.writerFor(NodeInfo.class).writeValueAsBytes(myInfo);
+            syncCuratorFramework
+                    .setData()
+                    .forPath(rootDirectory + "/" + nodeId, nodeInfoInBytes);
+            log.info("EphemeralNode<{}> success created", nodeId);
+            return nodeId;
         } catch (Exception e) {
             log.error("Failed creating ephemeral node for this instance");
             throw new RuntimeException(e);
@@ -248,7 +291,6 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
                 .build();
         VersionedModeledFramework<NodeConfigInfo> modeledClient = ModeledFramework.wrap(asyncCuratorFramework, spec).versioned();
         modeledClient.set(Versioned.from(nodeConfigInfo, 1));
-        log.info("Set data to " + path);
         // todo тут нужно как-то обработать ModelStage.exceptionally
 //        modeledClient.withPath().set(nodeConfigInfo);
     }

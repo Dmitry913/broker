@@ -23,9 +23,9 @@ public class LogFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String logInfo =
-                "Path: " + request.getContextPath() + "\n" +
+                "\nPath: " + request.getRequestURI() + "\n" +
                 "Method: " + request.getMethod() + "\n" +
-                "Headers: " + getAllHeaders(request) + "\n";
+                "Headers: " + getAllHeaders(request);
         log.info(logInfo);
         filterChain.doFilter(request, response);
     }

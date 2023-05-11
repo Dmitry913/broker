@@ -1,6 +1,7 @@
 package org.wasend.broker.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.wasend.broker.dao.interfaces.QueueRepository;
@@ -13,12 +14,16 @@ import org.wasend.broker.service.model.MessageModel;
 import org.wasend.broker.service.model.RegistryModel;
 import org.wasend.broker.service.model.SyncMessage;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MessageServiceImpl implements MessageService {
 
     private final MessageSender messageSender;
@@ -60,7 +65,7 @@ public class MessageServiceImpl implements MessageService {
             partitionToCountMessage.put(producerMessage.getPartitionId(), partitionToCountMessage.getOrDefault(producerMessage.getPartitionId(), 0) + 1);
         }
         // балансировка нагрузки - распределения сообщений
-        if (isNewTopic || isLightlyLoaded(producerMessage)) {
+        if (isNewTopic || isLightlyLoaded(producerMessage) || zooKeeperRepository.getCountPartition() == 1) {
             saveOnThisNode(producerMessage);
         } else {
             saveOnOtherNode(producerMessage);
@@ -80,19 +85,23 @@ public class MessageServiceImpl implements MessageService {
     }
 
     private void saveOnOtherNode(MessageModel producerMessage) {
+        Set<String> myPartitions = zooKeeperRepository.getMyPartitionId(producerMessage.getTopicName());
         // находим узел, на котором меньше всего сообщений
         String nodeDirectoryWithMinMessage = topicToCountMessageNode.get(producerMessage.getTopicName())
                 .entrySet()
                 .stream()
+                .filter(entry -> !myPartitions.contains(entry.getKey()))
                 .min(Map.Entry.comparingByValue()).get().getKey();
         messageSender.delegateMessage(producerMessage, zooKeeperRepository.getHostByDirectory(nodeDirectoryWithMinMessage));
     }
 
     private void saveOnThisNode(MessageModel producerMessage) {
+        List<String> myPartitions = new ArrayList<>(zooKeeperRepository.getMyPartitionId(producerMessage.getTopicName()));
+        // todo можно выбирать партицию с наименьшим кол-вом сообщений или другой способ балансировки
+        producerMessage.setPartitionId(myPartitions.get(new Random().nextInt(myPartitions.size())));
         // сохраняем сообщение в наше хранилище
         queueRepository.addMessage(producerMessage);
         // отправляем сообщение для синхронизации другим брокерам
-        producerMessage.setPartitionId(zooKeeperRepository.getMyPartitionId(producerMessage.getTopicName()));
         messageSender.sendSynchronizationMessage(mapperFactory.mapTo(producerMessage, SyncMessage.class), producerMessage.getTopicName());
     }
 

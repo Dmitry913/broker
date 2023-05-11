@@ -1,5 +1,6 @@
 package org.wasend.broker.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryNTimes;
@@ -11,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@Slf4j
 public class ZooKeeperConfiguration {
 
     @Value("${zookeeper.retry.count}")
@@ -25,6 +27,7 @@ public class ZooKeeperConfiguration {
     @Bean
     // как только SESSION_TIMEOUT произойдёт, все ефемерные ZNode будут удалены
     public CuratorFramework syncCuratorFramework() {
+        log.info("Creating bean syncCuratorFramework");
         CuratorFramework curatorFramework = CuratorFrameworkFactory
                 .newClient(
                         String.format("%s:%d", host, port),
@@ -37,6 +40,7 @@ public class ZooKeeperConfiguration {
     @Bean
     @Autowired
     public AsyncCuratorFramework asyncCuratorFramework(@Qualifier("syncCuratorFramework") CuratorFramework curatorFramework) {
+        log.info("Creating bean asyncCuratorFramework");
         return AsyncCuratorFramework.wrap(curatorFramework);
     }
 }

@@ -14,6 +14,7 @@ import org.wasend.broker.service.interfaces.MessageSender;
 import org.wasend.broker.service.model.Message;
 import org.wasend.broker.service.model.MessageModel;
 import org.wasend.broker.service.model.SyncMessage;
+import org.wasend.broker.utils.HelpUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -31,14 +32,17 @@ public class MessageSenderImpl implements MessageSender {
     private final WebClient webClient;
     private final QueueRepository queueRepository;
     private final ZooKeeperRepository zooKeeperRepository;
-    @Value("replica.protocol")
-    private final String replicaProtocol;
+    @Value("${replica.protocol}")
+    private String replicaProtocol;
+    @Value("${consumer.protocol}")
+    private String consumerProtocol;
 
     // todo можно было бы запустить в несколько потоков данное действие
     //  (но у них у всех должен быть один Repository, и если один поток забрал сообщение, то другой уже не должен брать его)
     @Override
 //    @Async - todo проверить, что запускается в отдельном потоке
     public void startSending() {
+        log.info("Start sending message");
         Flux.<MessageModel>create(fluxSink -> {
             while (true) {
                 // todo данная функция не должна ответить, пока не наступит deadline сообщения
@@ -49,9 +53,10 @@ public class MessageSenderImpl implements MessageSender {
                 // todo можно в несколько потоков сделать
                 .flatMap(address ->
                         generateRequest(
-                                address,
+                                HelpUtils.mapHostToUrl(address, consumerProtocol, "/v1/consumer/sendMessage"),
                                 new ConsumerMessagePayload(message.getPayload()),
                                 String.class))
+                .log()
                 .subscribe()
         );
     }
@@ -84,8 +89,7 @@ public class MessageSenderImpl implements MessageSender {
                 // нет смысла делать параллельно, так как кол-во реплик и кол-во получателей сообщений имеют разные порядки
                 .flatMap(address ->
                         // т.к. все методы возвращают новые объекты не будет проблем (из-за использования одного объекта WebClient) при параллельной работе с методов startSend
-                        generateRequest(address, message, String.class)
-                )
+                        generateRequest(address, message, String.class))
                 // todo можно отправить админам письмо на почту, о недоступности данной ноды
                 .doOnError(e -> ((SendingMessageException) e).getUrl());
     }
@@ -103,6 +107,7 @@ public class MessageSenderImpl implements MessageSender {
                         log.error("Error while sending synchronization message to {}", url);
                         return Mono.error(new SendingMessageException(message.getId(), url));
                     }
+                    log.info("Success sending request messageId={} to <{}>", message.getId(), url);
                     return clientResponse.bodyToMono(typeResponse);
                 });
     }

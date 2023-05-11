@@ -1,10 +1,12 @@
 package org.wasend.broker.dao.entity;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.SneakyThrows;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -42,5 +44,12 @@ public class MetaInfoZK {
         this.topicNameToInfo = new HashMap<>(otherMetaInfoZk.getTopicNameToInfo());
         this.countPartition = otherMetaInfoZk.getCountPartition();
         this.partitionIdToNodeDirectoryName = new HashMap<>(otherMetaInfoZk.getPartitionIdToNodeDirectoryName());
+    }
+
+    @SneakyThrows
+    @Override
+    public String toString() {
+        ObjectMapper mapper = new ObjectMapper();
+        return mapper.writerFor(MetaInfoZK.class).writeValueAsString(this);
     }
 }

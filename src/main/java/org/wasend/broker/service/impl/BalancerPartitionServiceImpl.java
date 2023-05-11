@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -15,6 +16,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,6 +31,7 @@ public class BalancerPartitionServiceImpl implements BalancerPartitionService {
     private final ZooKeeperRepository zooKeeperRepository;
     private final WebClient webClient;
     private final QueueRepository queueRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
     @Value("${replica.protocol}")
     // todo вынести в общий класс конфигов
     private String replicaProtocol;
@@ -59,9 +62,13 @@ public class BalancerPartitionServiceImpl implements BalancerPartitionService {
     @EventListener
     public void doOnNodeDown(List<String> livingNodes) {
         // находим название узла, который бы удалён
-        List<String> deletedNode = new ArrayList<>(zooKeeperRepository.getAllNodeDirectory());
-        deletedNode.removeAll(livingNodes);
-        String preferOwner = deletedNode.get(0);
+        List<String> cashNodes = new ArrayList<>(zooKeeperRepository.getAllNodeDirectory());
+        if (cashNodes.size() <= livingNodes.size()) {
+            // добавить новый узел в кеш
+            applicationEventPublisher.publishEvent(new HashSet<>(livingNodes));
+        }
+        cashNodes.removeAll(livingNodes);
+        String preferOwner = cashNodes.get(0);
         Set<String> lostInstancePartitions = zooKeeperRepository.getPartitionsByDirectoryNode(preferOwner);
         // по каждой партиции получить топик, и посмотреть есть ли партиция в данном топике за которую ответственен текущий экземпляр
         Map<String, String> lostTopicToPartitionId = lostInstancePartitions.stream().collect(Collectors.toMap(zooKeeperRepository::getTopicByPartitionId, partitionId -> partitionId));
@@ -89,6 +96,8 @@ public class BalancerPartitionServiceImpl implements BalancerPartitionService {
                         .subscribe(queueRepository::movePartitionToProcessing);
             }
         }
+        // удалить из кеша упавшие узлы
+        applicationEventPublisher.publishEvent(new HashSet<>(livingNodes));
     }
 
     @AllArgsConstructor

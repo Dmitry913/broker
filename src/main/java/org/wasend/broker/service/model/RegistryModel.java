@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 public class RegistryModel extends Message {
     private LocalDateTime timeRegistration;
     private String url;
+    private boolean isReplica;
 
     @SneakyThrows
     @Override

@@ -29,8 +29,14 @@ public class ZooKeeperConfiguration {
     public CuratorFramework syncCuratorFramework() {
         log.info("Creating bean syncCuratorFramework");
         CuratorFramework curatorFramework = CuratorFrameworkFactory
+//                .newClient(
+//                        String.format("%s:%d", host, port),
+//                        new RetryNTimes(countRetry, msBetweenRetries)
+//                );
                 .newClient(
                         String.format("%s:%d", host, port),
+                        600000,
+                        600000,
                         new RetryNTimes(countRetry, msBetweenRetries)
                 );
         curatorFramework.start();

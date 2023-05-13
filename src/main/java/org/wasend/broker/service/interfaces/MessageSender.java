@@ -1,7 +1,9 @@
 package org.wasend.broker.service.interfaces;
 
+import org.wasend.broker.dto.BrokerMessage;
+import org.wasend.broker.dto.ConsumerMessageRegistry;
 import org.wasend.broker.service.model.MessageModel;
-import org.wasend.broker.service.model.SyncMessage;
+import org.wasend.broker.service.model.RegistryModel;
 
 /**
  * Сервис для рассылки сообщений внешним системам (других брокерам и consumer-ам).
@@ -18,17 +20,18 @@ public interface MessageSender {
     /**
      * Метод для синхронизации сообщений между очередями
      */
-    void sendSynchronizationMessage(SyncMessage message, String topicName);
+    void sendSynchronizationProducerMessage(BrokerMessage message, String topicName);
 
     /**
      * Метод для синхронизации адресов всех зарегистрировавшихся consumer-ов.
+     * @param message
      */
     // todo Адрес консьюмеров должна определить и прислать клиентская библиотека
-    void sendSynchronizationMessage(SyncMessage message);
+    void sendSynchronizationRegistryMessage(ConsumerMessageRegistry message);
 
     /**
      * Пересылаем сообщение на другой узел в ходе балансировки нагрузки
      */
-    void delegateMessage(MessageModel producerMessage, String hostNode);
+    void delegateMessage(BrokerMessage producerMessage, String hostNode);
 
 }

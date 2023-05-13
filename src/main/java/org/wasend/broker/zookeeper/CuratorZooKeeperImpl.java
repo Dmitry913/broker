@@ -17,14 +17,19 @@ import org.apache.zookeeper.data.Stat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.ApplicationEventMulticaster;
 import org.springframework.stereotype.Component;
 import org.wasend.broker.dao.entity.MetaInfoZK;
 import org.wasend.broker.dao.entity.NodeInfo;
+import org.wasend.broker.eventObjects.Children;
 import org.wasend.broker.eventObjects.MetaInfo;
 
 import javax.xml.soap.Node;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.zookeeper.Watcher.Event.EventType.NodeChildrenChanged;
@@ -47,6 +52,7 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
     private final String rootDirectory = "/root";
     private final String directoryInstanceName;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final ApplicationEventMulticaster multicaster;
     private final String prefixEphemeralNode;
     private final ObjectMapper objectMapper;
 
@@ -54,6 +60,7 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
     public CuratorZooKeeperImpl(AsyncCuratorFramework asyncCuratorFramework,
                                 ApplicationEventPublisher applicationEventPublisher,
                                 CuratorFramework syncCuratorFramework,
+                                ApplicationEventMulticaster multicaster,
                                 @Value("${prefix.ephemeral.node}") String prefixEphemeralNode,
                                 @Value("${external.node.host}") String externalHost,
                                 @Value("${external.node.port}") String externalPort) {
@@ -62,11 +69,12 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
         this.syncCuratorFramework = syncCuratorFramework;
         this.objectMapper = new ObjectMapper();
         this.prefixEphemeralNode = prefixEphemeralNode;
+        this.multicaster = multicaster;
         // todo создать ноду в директории cluster, как только приложение запустилось (nodeId данного узла взять из zooKeeper.current.nodeId)
         directoryInstanceName = createEphemeralNode(externalHost, externalPort);
         log.info("EphemeralNode success created with nodeId - " + directoryInstanceName);
-        createRootDirectoryWatcher();
         createChildrenWatcher();
+        createRootDirectoryWatcher();
     }
 
 
@@ -78,7 +86,7 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
             log.info("Start getting rooInfo from ZooKeeper");
             ZNode<MetaInfoZK> zNode = getData(rootDirectory, MetaInfoZK.class);
             log.info("Success reading rootInfo(version={}):{}", zNode.stat().getVersion(), zNode.model().toString());
-            return new MetaInfo(zNode.stat().getVersion(), zNode.model());
+            return new MetaInfo(this, zNode.stat().getVersion(), zNode.model());
         } catch (Exception e) {
             log.error("Can't read info from zooKeeper by path: " + rootDirectory);
             throw new Exception(e);
@@ -87,11 +95,11 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
 
     @Override
     public NodeInfo getNodeInfoByDirectory(String directory) {
+        String correctDirectory = rootDirectory + "/" + directory;
         try {
-            String correctDirectory = rootDirectory + "/" + directory;
             return getData(correctDirectory, NodeInfo.class).model();
         } catch (Exception e) {
-            log.error("Can't read info from zooKeeper by path: " + directory);
+            log.error("Can't read info from zooKeeper by path <{}>", correctDirectory, e);
             throw new RuntimeException(e);
         }
     }
@@ -106,17 +114,21 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
         return directoryInstanceName;
     }
 
-//    @Override
-//    public boolean movePartitionToCurrentInstanceInTransaction(Set<String> partitionsId, int version) {
-//        // todo нужно в транзакции прочитать ещё раз информацию из Map<partitionId, Directory>, возможно уже кто-то взял на себя эту партицию, и если никто не взял, то взять на себя (добавить значение в Map<partitionId, Directory>) и отпустить транзакцию, иначе ничего не делать, так как информацию обновится через вотчер
-//        setData(rootDirectory, );
-//        try {
-//            CuratorOp checkOperation = curatorFramework.transactionOp().check().withVersion(version).forPath(rootDirectory);
-//            CuratorOp updateOperation = curatorFramework.transactionOp().setData().withVersion(version)
-//            curatorFramework.inTransaction().check().forPath(rootDirectory).
-//            curatorFramework.transactionOp().check().forPath(rootDirectory).get().
-//        }
-//    }
+    @Override
+    public List<String> getAllEphemeralNodeDirectory() {
+        return getChildrenDirectory(rootDirectory);
+    }
+
+    private List<String> getChildrenDirectory(String directory) {
+        try {
+            return syncCuratorFramework
+                    .getChildren()
+                    .forPath(directory);
+        } catch (Exception e) {
+            log.error("Failed getting child-nodes for directory<{}>", directory, e);
+            throw new RuntimeException(e);
+        }
+    }
 
     // создаёт путь с такими данными или обновляет существующие
     private <T> boolean setData(String path, T info, int version) {
@@ -150,7 +162,7 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
     private <T> ZNode<T> getData(String path, Class<T> tClass) throws Exception {
         Stat stat = new Stat();
         byte[] readBytes = syncCuratorFramework.getData().storingStatIn(stat).forPath(path);
-        return new ZNodeImpl<>(ZPath.parse(path), stat, objectMapper.readerFor(tClass).readValue(readBytes));
+        return new ZNodeImpl<>(ZPath.parse(path), stat, objectMapper.readValue(readBytes, tClass));
 //        ModelSpec<T> spec = ModelSpec.builder(
 //                        ZPath.parseWithIds(path),
 //                        JacksonModelSerializer.build(tClass))
@@ -168,7 +180,8 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
                     if (watchedEvent.getType().equals(NodeDataChanged)) {
                         log.info("Received event: rootDirectoryUpdated");
                         try {
-                            applicationEventPublisher.publishEvent(getRootInfo());
+                            multicaster.multicastEvent(getRootInfo());
+//                            applicationEventPublisher.publishEvent(getRootInfo());
                         } catch (Exception e) {
                             log.error("Failed reading updated information");
                         }
@@ -185,41 +198,37 @@ public class CuratorZooKeeperImpl implements CuratorZooKeeper {
                 .thenAccept(watchedEvent -> {
                     if (watchedEvent.getType().equals(NodeChildrenChanged)) {
                         try {
-                            applicationEventPublisher.publishEvent(asyncCuratorFramework
-                                    .getChildren()
-                                    .forPath(rootDirectory)
-                                    .toCompletableFuture()
-                                    .get()
-                                    .stream()
-                                    // оставляем только относительную директорию
-                                    .map(absolutelyDirectory -> absolutelyDirectory.split("/")[1])
-                                    .collect(Collectors.toList()));
+                            log.info("Ephemeral children changes");
+                            applicationEventPublisher.publishEvent(new Children(getChildrenDirectory(rootDirectory)));
+//                            applicationEventPublisher.publishEvent(syncCuratorFramework
+//                                    .getChildren()
+//                                    .forPath(rootDirectory)
+//                                    .stream();
                         } catch (Exception e) {
                             log.error("Failed getting instances changing", e);
                         }
                     }
+                    log.info("here createChildrenWatcher");
                     createChildrenWatcher();
                 });
     }
 
     private String createEphemeralNode(String externalHost, String externalPort) {
         try {
-            String nodeId = syncCuratorFramework
-                    .create()
-                    .withMode(CreateMode.EPHEMERAL_SEQUENTIAL)
-                    .forPath(rootDirectory + "/" + prefixEphemeralNode, new byte[]{})
-                    .split("/")[2];
+            String nodeId = prefixEphemeralNode + UUID.randomUUID();
             NodeInfo myInfo = NodeInfo.builder()
                     .host(externalHost)
                     .port(Integer.parseInt(externalPort))
                     .nodeId(nodeId)
                     .build();
             byte[] nodeInfoInBytes = objectMapper.writerFor(NodeInfo.class).writeValueAsBytes(myInfo);
-            syncCuratorFramework
-                    .setData()
-                    .forPath(rootDirectory + "/" + nodeId, nodeInfoInBytes);
+            String directory = syncCuratorFramework
+                    .create()
+                    .withMode(CreateMode.EPHEMERAL)
+                    .forPath(rootDirectory + "/" + nodeId, nodeInfoInBytes)
+                    .split("/")[2];
             log.info("EphemeralNode<{}> success created", nodeId);
-            return nodeId;
+            return directory;
         } catch (Exception e) {
             log.error("Failed creating ephemeral node for this instance");
             throw new RuntimeException(e);

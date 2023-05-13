@@ -4,16 +4,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.wasend.broker.dao.interfaces.QueueRepository;
 import org.wasend.broker.dao.interfaces.ZooKeeperRepository;
+import org.wasend.broker.dto.BrokerMessage;
 import org.wasend.broker.dto.ConsumerMessagePayload;
+import org.wasend.broker.dto.ConsumerMessageRegistry;
 import org.wasend.broker.exception.SendingMessageException;
 import org.wasend.broker.service.interfaces.MessageSender;
 import org.wasend.broker.service.model.Message;
 import org.wasend.broker.service.model.MessageModel;
-import org.wasend.broker.service.model.SyncMessage;
+import org.wasend.broker.service.model.RegistryModel;
 import org.wasend.broker.utils.HelpUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -28,7 +31,8 @@ import static org.wasend.broker.utils.HelpUtils.mapHostToUrl;
 @Slf4j
 public class MessageSenderImpl implements MessageSender {
 
-    private final static String PATH_FOR_SYNCHRONIZATION = "/v1/broker/updateReplica";
+    private final static String PATH_FOR_SYNCHRONIZATION_MESSAGE = "/v1/broker/addReplica";
+    private final static String PATH_FOR_SYNCHRONIZATION_REGISTRY = "/v1/broker/addRegistry";
     private final WebClient webClient;
     private final QueueRepository queueRepository;
     private final ZooKeeperRepository zooKeeperRepository;
@@ -40,7 +44,8 @@ public class MessageSenderImpl implements MessageSender {
     // todo можно было бы запустить в несколько потоков данное действие
     //  (но у них у всех должен быть один Repository, и если один поток забрал сообщение, то другой уже не должен брать его)
     @Override
-//    @Async - todo проверить, что запускается в отдельном потоке
+    //  - todo проверить, что запускается в отдельном потоке
+    @Async
     public void startSending() {
         log.info("Start sending message");
         Flux.<MessageModel>create(fluxSink -> {
@@ -62,29 +67,29 @@ public class MessageSenderImpl implements MessageSender {
     }
 
     @Override
-    public void sendSynchronizationMessage(SyncMessage message) {
+    public void sendSynchronizationRegistryMessage(ConsumerMessageRegistry message) {
         generateFluxForSynchronizationMessage(
                 message,
-                getWithProtocol(zooKeeperRepository.getAllNodesHost(), replicaProtocol, PATH_FOR_SYNCHRONIZATION)
+                getWithProtocol(zooKeeperRepository.getAllNodesHost(), replicaProtocol, PATH_FOR_SYNCHRONIZATION_REGISTRY)
         ).subscribe();
     }
 
     @Override
-    public void delegateMessage(MessageModel producerMessage, String hostNode) {
+    public void delegateMessage(BrokerMessage producerMessage, String hostNode) {
         String url = mapHostToUrl(hostNode, replicaProtocol, "/v1/broker/addMessage");
         generateRequest(url, producerMessage, String.class).toFuture()
                 .thenAccept(response -> log.info("Message sending success. Response - " + response));
     }
 
     @Override
-    public void sendSynchronizationMessage(SyncMessage message, String topicName) {
+    public void sendSynchronizationProducerMessage(BrokerMessage message, String topicName) {
         generateFluxForSynchronizationMessage(
                 message,
-                getWithProtocol(zooKeeperRepository.getReplicasAddress(topicName), replicaProtocol, PATH_FOR_SYNCHRONIZATION)
+                getWithProtocol(zooKeeperRepository.getReplicasAddress(topicName), replicaProtocol, PATH_FOR_SYNCHRONIZATION_MESSAGE)
         ).subscribe();
     }
 
-    private Flux<String> generateFluxForSynchronizationMessage(SyncMessage message, Collection<String> collection) {
+    private <T extends Message> Flux<String> generateFluxForSynchronizationMessage(T message, Collection<String> collection) {
         return Flux.fromIterable(collection)
                 // нет смысла делать параллельно, так как кол-во реплик и кол-во получателей сообщений имеют разные порядки
                 .flatMap(address ->
@@ -94,7 +99,7 @@ public class MessageSenderImpl implements MessageSender {
                 .doOnError(e -> ((SendingMessageException) e).getUrl());
     }
 
-    private <T> Mono<T> generateRequest(String url, Message message, Class<T> typeResponse) {
+    private <T,E extends Message> Mono<T> generateRequest(String url, E message, Class<T> typeResponse) {
         return webClient.post()
                 .uri(url)
                 .bodyValue(message)

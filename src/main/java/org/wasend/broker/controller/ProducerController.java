@@ -28,7 +28,7 @@ public class ProducerController {
     // todo добавить проверку на то, что указанный дедлайн у сообщения должен быть больше n секунд с текущего момента
     // todo добавить проверку на то, что host указанный в sendTo существует в системе.
     public void sendMessage(@RequestBody ProducerMessage message) {
-        service.addMessage(mapperFactory.mapTo(message, MessageModel.class));
+        service.addMessage(mapperFactory.mapTo(message, ProducerMessage.class, MessageModel.class));
     }
 
 }

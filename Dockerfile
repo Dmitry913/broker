@@ -1,0 +1,9 @@
+FROM openjdk:8
+COPY target/broker-1.2-SNAPSHOT.jar ./
+ENV ZK_HOST=localhost
+ENV ZK_PORT=2181
+ENV ZK_NODE_ID=node1
+ENV EXTERNAL_HOST=localhost
+ENV EXTERNAL_PORT=8080
+ENTRYPOINT ["java","-jar","broker-1.2-SNAPSHOT.jar"]
+EXPOSE 8080

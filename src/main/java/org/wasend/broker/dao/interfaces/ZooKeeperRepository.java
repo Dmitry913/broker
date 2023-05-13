@@ -1,7 +1,6 @@
 package org.wasend.broker.dao.interfaces;
 
-import org.wasend.broker.dao.entity.MetaInfoZK;
-
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -59,9 +58,14 @@ public interface ZooKeeperRepository {
 
     /**
      * Метод должен транзакционно обновить информацию в MetaInfoZk.partitionIdToNodeDirectoryName в zooKeeper-е
+     *
      * @param addPartitionsOnCurrentInstance - те партиции, которые можно забрать к себе
      * @return id-партиций, которые instance добавит в обслуживание
      */
     Set<String> movePartitionToCurrentInstanceInTransaction(Set<String> addPartitionsOnCurrentInstance, String preferOwner);
+
+    void actualizeDirectoryToNodesInfo(List<String> livingNodes);
+
+    String getDirectoryByPartition(String partitionId);
 
 }

@@ -4,6 +4,8 @@ import org.wasend.broker.dao.entity.MetaInfoZK;
 import org.wasend.broker.dao.entity.NodeInfo;
 import org.wasend.broker.eventObjects.MetaInfo;
 
+import java.util.List;
+
 /**
  * Класс для работы с zooKeeper
  */
@@ -22,5 +24,7 @@ public interface CuratorZooKeeper {
     boolean updateMetaInfo(MetaInfoZK metaInfo, int version);
 
     String instanceNodeId();
+
+    List<String> getAllEphemeralNodeDirectory();
 
 }

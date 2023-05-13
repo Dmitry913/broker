@@ -20,6 +20,6 @@ public class ConsumerController {
 
     @PostMapping("/registry")
     public void registry(@RequestBody ConsumerMessageRegistry message) {
-        service.registry(mapperFactory.mapTo(message, RegistryModel.class));
+        service.registry(mapperFactory.mapTo(message, ConsumerMessageRegistry.class, RegistryModel.class));
     }
 }

@@ -5,11 +5,14 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.wasend.broker.service.model.Message;
 
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class BrokerMessage extends ProducerMessage {
+@Builder
+public class BrokerMessage extends Message {
+    private ProducerMessage producerMessage;
     private String partitionId;
 }

@@ -52,15 +52,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
     private void initNodesInfo() {
         Flux.fromIterable(
                         // получаем информацию обо всех существующих nodes
-                        rootInfo.getTopicNameToInfo().values()
-                                // получаем наименование директорий всех узлов
-                                .stream()
-                                .flatMap(
-                                        topicInfo -> topicInfo.getPartitionsId()
-                                                .stream()
-                                                .map(partitionId -> rootInfo.getPartitionIdToNodeDirectoryName().get(partitionId))
-                                )
-                                .collect(Collectors.toSet())
+                        curatorZooKeeper.getAllEphemeralNodeDirectory()
                 )
                 .flatMap(directoryName -> Mono.just(curatorZooKeeper.getNodeInfoByDirectory(directoryName)))
                 .collectList()
@@ -92,7 +84,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
 
     @Override
     public Set<String> getAllNodeDirectory() {
-        return directoryToNodesInfo.keySet();
+        return directoryToNodesInfo == null ? Collections.emptySet() : directoryToNodesInfo.keySet();
     }
 
     @Override
@@ -141,7 +133,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
         Map<String, String> partitionToDirectory = new HashMap<>();
         Map<String, String> directoryToPartition = new HashMap<>();
         Iterator<String> iteratorByDirectory = partitionNodeDirectory.iterator();
-        log.info("Starting distribution of partitions:");
+        log.info("Starting distribution of partitions:<{}>", partitionNodeDirectory);
         for (String partitionId : newPartitions) {
             String directoryName = iteratorByDirectory.next();
             partitionToDirectory.put(partitionId, directoryName);
@@ -184,7 +176,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
             MetaInfoZK copyMetaInfo = new MetaInfoZK(rootInfo);
             copyPartitionsId.forEach(partitionId -> copyMetaInfo.getPartitionIdToNodeDirectoryName().put(partitionId, currentNodeId));
             if (curatorZooKeeper.updateMetaInfo(copyMetaInfo, rootDirectoryVersion)) {
-                log.error("Attempt success");
+                log.info("Attempt success");
                 return copyPartitionsId;
             } else {
                 // если привязка не удалась, нужно исключить из списка партиции, которые успели привязать другие брокеры и отправить запрос заново
@@ -203,10 +195,10 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
         this.rootDirectoryVersion = metaInfo.getRootDirectoryVersion();
     }
 
-    @EventListener
     // стереть информацию об удалённом узле из zookeeperRepository.directoryToNodeInfo
     // если добавился новый узел, то надо добавить информацию в zookeeperRepository.directoryToNodeInfo
-    public void actualizeDirectoryToNodesInfo(Set<String> livingNodes) {
+    public void actualizeDirectoryToNodesInfo(List<String> livingNodes) {
+        log.info("Actualize directories ephemeral nodes");
         Set<String> unchangedNodes = new HashSet<>(directoryToNodesInfo.keySet());
         // пересечение - те директории, которые никак не изменились
         unchangedNodes.retainAll(livingNodes);
@@ -220,6 +212,10 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
         updateReplicaHosts(resultNode);
     }
 
+    @Override
+    public String getDirectoryByPartition(String partitionId) {
+        return rootInfo.getPartitionIdToNodeDirectoryName().get(partitionId);
+    }
 
     private String getAddressFromHostAndPort(NodeInfo nodeInfo) {
         return nodeInfo.getHost() + ":" + nodeInfo.getPort();
@@ -227,7 +223,7 @@ public class ZooKeeperRepositoryImpl implements ZooKeeperRepository {
 
     public void updateReplicaHosts(Collection<NodeInfo> nodesInfo) {
         this.directoryToNodesInfo = nodesInfo.stream()
-                .peek(nodeInfo -> log.info("Node{} detected and added", nodeInfo.getNodeId()))
+                .peek(nodeInfo -> log.info("Node<{}> detected and updated", nodeInfo.getNodeId()))
                 .collect(Collectors.toMap(NodeInfo::getNodeId, node -> node));
     }
 }

@@ -3,6 +3,7 @@ package org.wasend.broker.service.impl;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.wasend.broker.dao.interfaces.QueueRepository;
 import org.wasend.broker.dao.interfaces.ZooKeeperRepository;
+import org.wasend.broker.eventObjects.Children;
 import org.wasend.broker.service.interfaces.BalancerPartitionService;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -26,6 +28,7 @@ import static org.wasend.broker.utils.HelpUtils.mapHostToUrl;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BalancerPartitionServiceImpl implements BalancerPartitionService {
 
     private final ZooKeeperRepository zooKeeperRepository;
@@ -40,6 +43,9 @@ public class BalancerPartitionServiceImpl implements BalancerPartitionService {
     public Set<String> getDirectoryNodesForNewTopic() {
         Map<String, Integer> directoryNodeToCountMessage = new HashMap<>();
         Flux.fromIterable(zooKeeperRepository.getAllNodeDirectory())
+                // todo сейчас для упрощения сделано так, что сообщение для нового топика всегда будет сохранятся на данном узле
+                //  вне зависимости от его загруженности
+                .filter(node -> !zooKeeperRepository.getCurrentDirectoryNode().equals(node))
                 .flatMap(directory ->
                         Mono.just(new Pair<>(
                                 directory,
@@ -60,14 +66,17 @@ public class BalancerPartitionServiceImpl implements BalancerPartitionService {
     }
 
     @EventListener
-    public void doOnNodeDown(List<String> livingNodes) {
+    public void doOnNodeChanges(Children livingNodes) {
         // находим название узла, который бы удалён
         List<String> cashNodes = new ArrayList<>(zooKeeperRepository.getAllNodeDirectory());
-        if (cashNodes.size() <= livingNodes.size()) {
+        if (cashNodes.size() <= livingNodes.getEphemeralChildrenNodes().size()) {
             // добавить новый узел в кеш
-            applicationEventPublisher.publishEvent(new HashSet<>(livingNodes));
+            log.info("New nodes occurred. All nodes<{}>", livingNodes.getEphemeralChildrenNodes());
+            zooKeeperRepository.actualizeDirectoryToNodesInfo(livingNodes.getEphemeralChildrenNodes());
+            return;
         }
-        cashNodes.removeAll(livingNodes);
+        log.info("Nodes was deleted. All nodes<{}>", livingNodes);
+        cashNodes.removeAll(livingNodes.getEphemeralChildrenNodes());
         String preferOwner = cashNodes.get(0);
         Set<String> lostInstancePartitions = zooKeeperRepository.getPartitionsByDirectoryNode(preferOwner);
         // по каждой партиции получить топик, и посмотреть есть ли партиция в данном топике за которую ответственен текущий экземпляр
@@ -97,7 +106,7 @@ public class BalancerPartitionServiceImpl implements BalancerPartitionService {
             }
         }
         // удалить из кеша упавшие узлы
-        applicationEventPublisher.publishEvent(new HashSet<>(livingNodes));
+        zooKeeperRepository.actualizeDirectoryToNodesInfo(livingNodes.getEphemeralChildrenNodes());
     }
 
     @AllArgsConstructor

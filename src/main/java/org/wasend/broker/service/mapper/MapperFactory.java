@@ -35,7 +35,7 @@ public class MapperFactory {
         }
     }
 
-    public <T,E> E mapTo(T from, Class<E> classToMap) {
+    public <T,E> E mapTo(T from, Class<T> classFromMap, Class<E> classToMap) {
         if (from == null) {
             return null;
         }
@@ -43,7 +43,7 @@ public class MapperFactory {
         if (sourceToMapper == null) {
             return null;
         }
-        DefaultMapper mapper = sourceToMapper.get(from.getClass());
+        DefaultMapper mapper = sourceToMapper.get(classFromMap);
         if (mapper == null) {
             return null;
         }

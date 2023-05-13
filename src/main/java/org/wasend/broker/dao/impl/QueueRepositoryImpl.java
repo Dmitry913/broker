@@ -50,15 +50,6 @@ public class QueueRepositoryImpl implements QueueRepository {
         topicNameToCountMasterMessage = new HashMap<>();
         partitionIdToReplicaPartitionMessages = new HashMap<>();
         currentTimeForSend = LocalDateTime.MAX;
-        // т.к. поток асинхронный, нужно дождаться момента, пока переменная publisher не инициализируется
-//        while (publisher == null) {
-//            log.info("wait");
-//            try {
-//                Thread.sleep(1000);
-//            } catch (Exception e) {
-//
-//            }
-//        }
     }
 
     // todo можно завернуть в аспект, чтобы пушить как-то (подумать над механизмом тригера функции (может как-то через коллБек/аспекты/ивенты/флакс)
@@ -100,7 +91,11 @@ public class QueueRepositoryImpl implements QueueRepository {
         log.info("Beginning messageForSending <{}>", messageJson);
         // начинаю слушать события
         Disposable disposable = messageExchanger
-                .doOnNext(message -> log.info("Change messageForSending to <{}>", message.toString()))
+                .doOnNext(message -> {
+                    log.info("Change messageForSending to <{}>", message.toString());
+                    //debug
+                    log.info(LocalDateTime.now().toString());
+                })
                 .subscribe(linker::setLink);
         /** Мониторит постоянно дедлайн линкера (своего рода вотчер).
          *  Реализовано так, потому что может прийти сообщение с более ранним дедлайном.
@@ -111,6 +106,7 @@ public class QueueRepositoryImpl implements QueueRepository {
         }
         // закрываю подписку, освобождая ресурсы
         disposable.dispose();
+        log.info("Deadline has arrived");
         return linker.getLink();
     }
 
